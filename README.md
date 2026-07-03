@@ -41,3 +41,19 @@ npm run dev
 # Web (http://localhost:5173)
 cd web && npm i && npm run dev
 ```
+
+### Supabase なしで画面を確認する（モックAPI）
+
+Supabase を用意しなくても、シードデータ入りのモックAPIでサイト全体を動かせます。
+
+```bash
+# ターミナル1: モックAPI (http://localhost:8787, Node 18+ のみで動作)
+node tools/mock-api.mjs
+
+# ターミナル2: フロントエンド
+cd web && npm i && npm run dev
+# → http://localhost:5173 を開く
+```
+
+デモアカウント: ユーザーID `DEMO123456` / パスワード `password123`
+（投稿・マイページの統計・写真管理まで一通り試せます。データはメモリ上のみ）
