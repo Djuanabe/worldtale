@@ -1,0 +1,20 @@
+name = "worldtale-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# --- シークレット（値はコミットせず wrangler secret put で登録する）---
+# 以下の4つを本番環境へ登録してください:
+#
+#   npx wrangler secret put SUPABASE_URL
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   npx wrangler secret put JWT_SECRET
+#   npx wrangler secret put ALLOWED_ORIGIN
+#
+# ローカル開発では .dev.vars（.dev.vars.example をコピー）に記載します。
+#
+# 変数の意味:
+#   SUPABASE_URL              … Supabase プロジェクトの URL（末尾スラッシュなし）
+#   SUPABASE_SERVICE_ROLE_KEY … service_role キー（サーバー側のみ・絶対に公開しない）
+#   JWT_SECRET                … セッション JWT(HS256) の署名鍵（十分に長いランダム文字列）
+#   ALLOWED_ORIGIN            … CORS 許可オリジン（未設定時は * ）
