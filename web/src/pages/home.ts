@@ -169,14 +169,16 @@ export async function renderHome(
     try {
       const summary = await mapSummary(year ? Number(year) : undefined);
       counts = summary.counts;
-      max = Math.max(0, ...Object.values(counts));
-      const ctx = baseCanvas.getContext("2d");
-      if (ctx) drawJapanMapBase(ctx, GRID, counts, max, OKINAWA_INSET);
-      const hctx = hiCanvas.getContext("2d");
-      if (hctx) hctx.clearRect(0, 0, JAPAN_MAP_W, JAPAN_MAP_H);
     } catch {
-      mapHost.insertBefore(errorNode("地図の読み込みに失敗しました。"), mapFrame);
+      // 件数が取れなくても地図自体は描く（濃淡なし）
+      counts = {};
+      mapHost.insertBefore(errorNode("物語数の読み込みに失敗しました。"), mapFrame);
     }
+    max = Math.max(0, ...Object.values(counts));
+    const ctx = baseCanvas.getContext("2d");
+    if (ctx) drawJapanMapBase(ctx, GRID, counts, max, OKINAWA_INSET);
+    const hctx = hiCanvas.getContext("2d");
+    if (hctx) hctx.clearRect(0, 0, JAPAN_MAP_W, JAPAN_MAP_H);
   }
 
   yearSelect.addEventListener("change", () => {

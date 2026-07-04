@@ -149,12 +149,15 @@ def main():
                 grid[cy][cx] = "."
 
     # --- 内陸の取りこぼし穴を埋める ---
-    # セル中心が県境の隙間に落ちて '.' になった1〜2セルの穴は、
-    # 海色+海岸線の輪郭で「謎のひし形」に見えてしまう。
-    # 外周からの flood fill で外海に到達できない水セルを検出し、
-    # 琵琶湖（意図的な水域）以外は周囲で最も多い県コードで埋める。
+    # セル中心が県境の隙間に落ちて '.' になった「1セルだけの穴」は、
+    # 海色+海岸線の輪郭で「謎のひし形」に見えてしまうので埋める。
+    # ただし瀬戸内海・東京湾・有明海などは、海峡がセル幅より狭いために
+    # flood fill 上は「閉じた水域」になることがある（実在の海）。
+    # そのため (1) 到達判定は斜めも許す8近傍で緩めに、
+    # (2) 埋めるのは孤立した1セルの穴だけに限定する（2セル以上の水域は実在とみなし残す）。
     from collections import deque
 
+    dirs8 = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)]
     reachable = [[False] * grid_w for _ in range(GRID_H)]
     dq = deque()
     for x in range(grid_w):
@@ -169,7 +172,7 @@ def main():
                 dq.append((x, y))
     while dq:
         x, y = dq.popleft()
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for dx, dy in dirs8:
             nx, ny = x + dx, y + dy
             if 0 <= nx < grid_w and 0 <= ny < GRID_H and grid[ny][nx] == "." and not reachable[ny][nx]:
                 reachable[ny][nx] = True
@@ -180,15 +183,26 @@ def main():
         for cx in range(grid_w):
             if grid[cy][cx] != "." or reachable[cy][cx]:
                 continue
+            # 8近傍にも到達不能な水セルがあれば「2セル以上の水域」なので残す
+            isolated = all(
+                not (
+                    0 <= cx + dx < grid_w
+                    and 0 <= cy + dy < GRID_H
+                    and grid[cy + dy][cx + dx] == "."
+                    and not reachable[cy + dy][cx + dx]
+                )
+                for dx, dy in dirs8
+            )
+            if not isolated:
+                continue
             lon, lat = lonlat_of(cx, cy)
             if point_in_ring(lon, lat, BIWA_POLYGON):
                 continue  # 琵琶湖は残す
             neigh = {}
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    nx, ny = cx + dx, cy + dy
-                    if 0 <= nx < grid_w and 0 <= ny < GRID_H and grid[ny][nx] != ".":
-                        neigh[grid[ny][nx]] = neigh.get(grid[ny][nx], 0) + 1
+            for dx, dy in dirs8:
+                nx, ny = cx + dx, cy + dy
+                if 0 <= nx < grid_w and 0 <= ny < GRID_H and grid[ny][nx] != ".":
+                    neigh[grid[ny][nx]] = neigh.get(grid[ny][nx], 0) + 1
             if neigh:
                 grid[cy][cx] = max(neigh, key=neigh.get)
                 filled_holes += 1
