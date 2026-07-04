@@ -18,6 +18,80 @@ function twitterIntentUrl(text: string, url: string): string {
   return `https://twitter.com/intent/tweet?${sp.toString()}`;
 }
 
+const QUIET_TEXT = "世界のどこかに私の物語を追加しました #WorldTale";
+
+// 「そっと共有」のみ（閲覧画面用: /story/:id と読書モード）
+export function buildQuietShareRow(): HTMLElement {
+  const anonUrl = `${location.origin}/`;
+  const shareRow = el("div", { class: "share-row" });
+  shareRow.append(
+    el(
+      "a",
+      {
+        class: "btn btn-outline",
+        href: twitterIntentUrl(QUIET_TEXT, anonUrl),
+        target: "_blank",
+        rel: "noopener noreferrer"
+      },
+      ["そっと共有"]
+    )
+  );
+  if (typeof navigator.share === "function") {
+    shareRow.append(
+      el(
+        "button",
+        {
+          class: "btn btn-outline",
+          onclick: () => {
+            void navigator.share({ text: QUIET_TEXT, url: anonUrl }).catch(() => {});
+          }
+        },
+        ["この端末でそっと共有"]
+      )
+    );
+  }
+  return shareRow;
+}
+
+// 作者用（マイページの自分の物語ごと）: 「私の物語として共有」+「そっと共有」
+export function buildAuthorShareRow(title: string, storyId: string): HTMLElement {
+  const origin = location.origin;
+  const asAuthorText = `「${title}」 — わたしの物語 #WorldTale`;
+  const asAuthorUrl = `${origin}/story/${storyId}`;
+
+  const shareRow = el("div", { class: "share-row share-row-compact" });
+  shareRow.append(
+    el(
+      "a",
+      {
+        class: "btn btn-outline btn-small",
+        href: twitterIntentUrl(asAuthorText, asAuthorUrl),
+        target: "_blank",
+        rel: "noopener noreferrer"
+      },
+      ["私の物語として共有"]
+    )
+  );
+  if (typeof navigator.share === "function") {
+    shareRow.append(
+      el(
+        "button",
+        {
+          class: "btn btn-outline btn-small",
+          onclick: () => {
+            void navigator.share({ text: asAuthorText, url: asAuthorUrl }).catch(() => {});
+          }
+        },
+        ["この端末で共有"]
+      )
+    );
+  }
+  const quiet = buildQuietShareRow();
+  quiet.querySelectorAll(".btn").forEach((b) => b.classList.add("btn-small"));
+  for (const child of Array.from(quiet.children)) shareRow.append(child);
+  return shareRow;
+}
+
 export async function renderStoryPage(
   params: Record<string, string>,
   _query: URLSearchParams,
@@ -109,67 +183,8 @@ export async function renderStoryPage(
   reactionRow.append(likeBtn, metBtn);
   container.append(reactionRow);
 
-  // ---- 共有 ----
-  const origin = location.origin;
-  const asAuthorText = `「${story.title}」 — わたしの物語 #WorldTale`;
-  const asAuthorUrl = `${origin}/story/${story.id}`;
-  const anonText = "世界のどこかに私の物語を追加しました #WorldTale";
-  const anonUrl = `${origin}/`;
-
-  const shareRow = el("div", { class: "share-row" });
-  shareRow.append(
-    el(
-      "a",
-      {
-        class: "btn btn-outline",
-        href: twitterIntentUrl(asAuthorText, asAuthorUrl),
-        target: "_blank",
-        rel: "noopener noreferrer"
-      },
-      ["私の物語として共有"]
-    )
-  );
-  if (typeof navigator.share === "function") {
-    shareRow.append(
-      el(
-        "button",
-        {
-          class: "btn btn-outline",
-          onclick: () => {
-            void navigator.share({ text: asAuthorText, url: asAuthorUrl }).catch(() => {});
-          }
-        },
-        ["この端末で共有"]
-      )
-    );
-  }
-  shareRow.append(
-    el(
-      "a",
-      {
-        class: "btn btn-outline",
-        href: twitterIntentUrl(anonText, anonUrl),
-        target: "_blank",
-        rel: "noopener noreferrer"
-      },
-      ["そっと共有"]
-    )
-  );
-  if (typeof navigator.share === "function") {
-    shareRow.append(
-      el(
-        "button",
-        {
-          class: "btn btn-outline",
-          onclick: () => {
-            void navigator.share({ text: anonText, url: anonUrl }).catch(() => {});
-          }
-        },
-        ["この端末で共有（そっと）"]
-      )
-    );
-  }
-  container.append(shareRow);
+  // ---- 共有（閲覧画面は「そっと共有」のみ） ----
+  container.append(buildQuietShareRow());
 
   // ---- 編集・削除（本人のみ） ----
   if (isLoggedIn()) {
@@ -222,7 +237,7 @@ export async function renderStoryPage(
   container.append(el("p", {}, [reportLink]));
 }
 
-function openReportModal(storyId: string): void {
+export function openReportModal(storyId: string): void {
   openModal((close) => {
     const reasonSelect = el("select", {}) as HTMLSelectElement;
     const reasons: { value: string; label: string }[] = [

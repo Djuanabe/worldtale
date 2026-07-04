@@ -3,18 +3,18 @@ import { PREFECTURES } from "../prefectures";
 import { el, errorNode, loadingNode, yearOptions } from "../ui";
 
 function colorFor(count: number, max: number): string {
-  if (count <= 0 || max <= 0) return "#fffdf7";
+  if (count <= 0 || max <= 0) return "#b8cca0"; // 物語なし: 薄い草色
   const ratio = Math.min(1, count / max);
-  // 生成り(255,253,247) → 深緑(91,110,79) へ補間
-  const from = [255, 253, 247];
-  const to = [91, 110, 79];
-  const rgb = from.map((c, i) => Math.round(c + (to[i] - c) * (0.15 + ratio * 0.85)));
+  // 淡い草原(184,204,160) → 深い森の緑(58,102,58) へ補間（RPGフィールド調）
+  const from = [184, 204, 160];
+  const to = [58, 102, 58];
+  const rgb = from.map((c, i) => Math.round(c + (to[i] - c) * (0.18 + ratio * 0.82)));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 
 function textColorFor(count: number, max: number): string {
   const ratio = max > 0 ? count / max : 0;
-  return ratio > 0.45 ? "#fffdf7" : "#3a3226";
+  return ratio > 0.4 ? "#f8f8f0" : "#20301c";
 }
 
 export async function renderHome(
@@ -88,9 +88,9 @@ export async function renderHome(
     wrap.append(grid);
 
     const legend = el("div", { class: "map-legend" }, [
-      el("span", { class: "legend-swatch", style: "background:#fffdf7" }),
+      el("span", { class: "legend-swatch", style: "background:#b8cca0" }),
       "少ない",
-      el("span", { class: "legend-swatch", style: "background:rgb(91,110,79)" }),
+      el("span", { class: "legend-swatch", style: "background:rgb(58,102,58)" }),
       "多い"
     ]);
     wrap.append(legend);

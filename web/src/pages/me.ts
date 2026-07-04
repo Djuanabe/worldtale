@@ -2,6 +2,7 @@ import { MyStory, Photo, deletePhoto, isLoggedIn, myPhotos, myStories } from "..
 import { prefName, seasonLabel } from "../prefectures";
 import { el, errorNode, loadingNode, pageTitle } from "../ui";
 import { navigate } from "../router";
+import { buildAuthorShareRow } from "./story";
 
 export async function renderMePage(
   _params: Record<string, string>,
@@ -62,6 +63,10 @@ function buildStoryTable(stories: MyStory[]): HTMLElement {
   ]);
   const tbody = el("tbody", {});
   for (const s of stories) {
+    const ops = el("div", { class: "me-ops" }, [
+      el("a", { href: `/story/${s.id}/edit`, "data-link": true }, ["編集"]),
+      buildAuthorShareRow(s.title, s.id) // 私の物語として共有 + そっと共有
+    ]);
     tbody.append(
       el("tr", {}, [
         el("td", {}, [el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])]),
@@ -70,7 +75,7 @@ function buildStoryTable(stories: MyStory[]): HTMLElement {
         el("td", {}, [String(s.likeCount)]),
         el("td", {}, [String(s.metCount)]),
         el("td", {}, [s.isHidden ? "非公開" : "公開中"]),
-        el("td", {}, [el("a", { href: `/story/${s.id}/edit`, "data-link": true }, ["編集"])])
+        el("td", {}, [ops])
       ])
     );
   }

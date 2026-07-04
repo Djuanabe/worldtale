@@ -59,4 +59,4 @@ npm run preview
 - `src/prefectures.ts` … 47都道府県のコード・名称・タイル型地図のグリッド座標
 - `src/ui.ts` … ヘッダー・フッター・モーダルなどの共有UI部品
 - `src/pages/*.ts` … 画面ごとの実装
-- `src/style.css` … 唯一のスタイルシート（穏やか・クラシックなデザイン）
+- `src/style.css` … 唯一のスタイルシート（レトロRPG風・ドット絵調デザイン。フォントは DotGothic16）
