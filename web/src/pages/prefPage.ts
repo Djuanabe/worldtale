@@ -16,24 +16,28 @@ import { buildQuietShareRow, openReportModal } from "./story";
 // ---- シーン定数 ----
 const HORIZON = 0.44; // 地平線（シーン高さに対する割合）
 const GROUND_NEAR = 0.96; // 一番手前の足元位置
+const ROAD_HALF_TOP = 0.008; // 消失点付近の道の半幅（幅に対する割合）
 const ROAD_HALF_BOTTOM = 0.34; // 画面下端での道の半幅（幅に対する割合）
 const BASE_AVATAR_H = 118; // 手前(t=1)のアバターの高さ(px)
 const MAX_CHUNK = 160;
+const EDGE_OUT = 0.12; // 画面外とみなす左右マージン（幅に対する割合）
 
-// ドット絵スプライトの配色（服・ズボンの組。肌・髪は共通で色数を絞る）
+// ---- 白塗りスプライトの階調（「まっしろな旅人」） ----
 interface SpriteScheme {
-  shirt: string;
-  pants: string;
+  base: string; // 白
+  light: string; // 明るいグレー
+  mid: string; // 中間グレー
 }
 
+const SPRITE_OUTLINE = "#3a3a4a";
+
 const AVATAR_SCHEMES: SpriteScheme[] = [
-  { shirt: "#7098c8", pants: "#3a4a6a" },
-  { shirt: "#88b06a", pants: "#4a5a3a" },
-  { shirt: "#d86060", pants: "#5a3030" },
-  { shirt: "#e8c860", pants: "#6a5a30" },
-  { shirt: "#a080c0", pants: "#4a3a60" },
-  { shirt: "#e8e8e0", pants: "#4a4a5a" }
+  { base: "#f8f8f0", light: "#d8d8d0", mid: "#b8b8b0" }, // ニュートラル
+  { base: "#f8f4e8", light: "#dcd4c4", mid: "#bcb4a4" }, // わずかに暖色
+  { base: "#f0f4f8", light: "#d0d8e0", mid: "#b0b8c0" } // わずかに寒色
 ];
+
+type WalkerState = "enter" | "wander" | "leave";
 
 interface Walker {
   btn: HTMLButtonElement;
@@ -42,11 +46,17 @@ interface Walker {
   story: StorySummary;
   scheme: SpriteScheme;
   t: number; // 奥行き 0=遠い 1=近い
-  baseX: number; // 0..1（幅に対する割合）
+  x: number; // 現在の横位置 0..1（幅に対する割合）
+  homeX: number; // 滞在の中心位置
+  exitX: number; // 退場先（画面外）
+  state: WalkerState;
+  wanderT0: number; // うろうろ開始時刻(sec)
   amp: number;
-  speed: number;
+  speed: number; // うろうろの周期
+  walkSpeed: number; // 入退場の歩行速度（幅割合/秒）
   bobSpeed: number;
   phase: number;
+  facing: 1 | -1;
   dead: boolean;
 }
 
@@ -58,6 +68,18 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// シード付き乱数（都道府県コードで風景を固定し、再訪時に同じ景色にする）
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function groundY(t: number): number {
   return HORIZON + Math.pow(t, 1.35) * (GROUND_NEAR - HORIZON);
 }
@@ -66,40 +88,76 @@ function scaleAt(t: number): number {
   return 0.3 + 0.7 * t;
 }
 
-function roadHalfAt(yFrac: number): number {
-  return (ROAD_HALF_BOTTOM * (yFrac - HORIZON)) / (1 - HORIZON);
+// ---- ドット絵スプライト（16×24、白塗り+暗色輪郭、歩行4フェーズ） ----
+// O=輪郭 W=白 L=明グレー D=中間グレー .=透過
+
+// 頭〜肩（全フレーム共通、rows 0..9）
+const SPRITE_HEAD: string[] = [
+  "......OOOO......",
+  ".....OWWWWO.....",
+  "....OWWWWWWO....",
+  "....OWWWWWWO....",
+  "....OWWWWLWO....",
+  "....OWWWWLWO....",
+  "....OWWWWWWO....",
+  ".....OWWWWO.....",
+  ".....OWDDWO.....",
+  "....OWWWWWWO...."
+];
+
+// 直立/通過ポーズ（rows 10..23）: 腕は下ろし、脚は揃える
+const SPRITE_PASS: string[] = [
+  "..OWOWWWWWWOWO..",
+  "..OWOWWWWWWOWO..",
+  "..OWOWWLLWWOWO..",
+  "..OWOWWLLWWOWO..",
+  "..OLOWWLLWWOLO..",
+  "..OOOWWLLWWOOO..",
+  "....OWWWWWWO....",
+  "....OWWOOWWO....",
+  "....OWWOOWWO....",
+  "....OWWOOWWO....",
+  "....OWWOOWWO....",
+  "....OWWOOWWO....",
+  "....OWWOOWWO....",
+  "....OOOOOOOO...."
+];
+
+// 歩幅ポーズ（rows 10..23）: 脚を開き、腕を前後に振る（左右非対称）
+const SPRITE_STRIDE: string[] = [
+  "..OWOWWWWWWOWO..",
+  "..OWOWWWWWWOWO..",
+  "..OLOWWLLWWOWO..",
+  "..OOOWWLLWWOWO..",
+  "....OWWLLWWOWO..",
+  "....OWWLLWWOLO..",
+  "....OWWWWWWO....",
+  "....OWWOOWWO....",
+  "...OWWO..OWWO...",
+  "...OWWO..OWWO...",
+  "..OWWO....OWWO..",
+  "..OWWO....OWWO..",
+  ".OWWO......OWWO.",
+  ".OOOO......OOOO."
+];
+
+function mirrorRows(rows: string[]): string[] {
+  return rows.map((r) => [...r].reverse().join(""));
 }
 
-// ---- ドット絵スプライト（8×12 グリッド、歩行2フレーム） ----
-// H=髪 S=肌 T=服 P=ズボン .=透過
-const SPRITE_SHARED: string[] = [
-  "..HHHH..",
-  "..HHHH..",
-  "..SSSS..",
-  "..SSSS..",
-  ".TTTTTT.",
-  ".TTTTTT.",
-  ".TTTTTT.",
-  "..TTTT..",
-  "..PPPP..",
-  "..PPPP.."
-];
-const SPRITE_LEGS_A: string[] = [".PP..PP.", ".PP..PP."]; // 脚を開く
-const SPRITE_LEGS_B: string[] = ["..PPPP..", "..P..P.."]; // 脚を閉じる
-
-const HAIR_COLOR = "#503828";
-const SKIN_COLOR = "#f0c8a0";
+// 反対側の歩幅（腕振りも反転して2〜4フレーム相当のサイクルにする）
+const SPRITE_STRIDE_M = mirrorRows(SPRITE_STRIDE);
 
 function spriteColor(ch: string, scheme: SpriteScheme): string | null {
   switch (ch) {
-    case "H":
-      return HAIR_COLOR;
-    case "S":
-      return SKIN_COLOR;
-    case "T":
-      return scheme.shirt;
-    case "P":
-      return scheme.pants;
+    case "O":
+      return SPRITE_OUTLINE;
+    case "W":
+      return scheme.base;
+    case "L":
+      return scheme.light;
+    case "D":
+      return scheme.mid;
     default:
       return null;
   }
@@ -136,119 +194,232 @@ function appendSpriteRows(
   });
 }
 
-// ドット人間スプライト。walk=true で2フレーム歩行（CSSで交互表示）
+// 白塗りドット人間スプライト。walk=true で歩行4フェーズ（CSSで切り替え）
 function buildPersonSvg(scheme: SpriteScheme, heightPx: number, walk: boolean): SVGSVGElement {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 8 12");
+  svg.setAttribute("viewBox", "0 0 16 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("shape-rendering", "crispEdges");
   svg.classList.add("walker-svg");
   if (walk) svg.classList.add("sprite-walk");
   svg.style.height = `${heightPx}px`;
-  svg.style.width = `${(heightPx * 8) / 12}px`;
+  svg.style.width = `${(heightPx * 16) / 24}px`;
 
-  const shared = document.createElementNS(ns, "g");
-  appendSpriteRows(ns, shared, SPRITE_SHARED, 0, scheme);
+  const head = document.createElementNS(ns, "g");
+  appendSpriteRows(ns, head, SPRITE_HEAD, 0, scheme);
 
-  const frameA = document.createElementNS(ns, "g");
-  frameA.setAttribute("class", "frame-a");
-  appendSpriteRows(ns, frameA, SPRITE_LEGS_A, 10, scheme);
+  const makeFrame = (cls: string, rows: string[]): SVGGElement => {
+    const g = document.createElementNS(ns, "g");
+    g.setAttribute("class", cls);
+    appendSpriteRows(ns, g, rows, 10, scheme);
+    return g;
+  };
 
-  const frameB = document.createElementNS(ns, "g");
-  frameB.setAttribute("class", "frame-b");
-  appendSpriteRows(ns, frameB, SPRITE_LEGS_B, 10, scheme);
-
-  svg.append(shared, frameA, frameB);
+  svg.append(
+    head,
+    makeFrame("frame-s1", SPRITE_STRIDE),
+    makeFrame("frame-p", SPRITE_PASS),
+    makeFrame("frame-s2", SPRITE_STRIDE_M)
+  );
   return svg;
 }
 
-// 道・野原・空の背景（レトロRPGフィールド調。バンド状のべた塗り、外部アセット不使用）
-function buildSceneBackground(): SVGSVGElement {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 100 100");
-  svg.setAttribute("preserveAspectRatio", "none");
-  svg.setAttribute("shape-rendering", "crispEdges");
-  svg.classList.add("scene-bg");
-  svg.setAttribute("aria-hidden", "true");
+// ---- ドット絵の背景（低解像度 canvas に1ドットずつ描き pixelated 拡大） ----
 
-  const hY = HORIZON * 100;
+function roadHalfPx(y: number, horizonY: number, H: number, W: number): number {
+  const fr = (y - horizonY) / Math.max(1, H - horizonY);
+  return (ROAD_HALF_TOP + (ROAD_HALF_BOTTOM - ROAD_HALF_TOP) * fr) * W;
+}
 
-  function shape(tag: string, attrs: Record<string, string>): SVGElement {
-    const node = document.createElementNS(ns, tag);
-    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
-    return node;
+function pickSeeded(rnd: () => number, arr: string[]): string {
+  return arr[Math.floor(rnd() * arr.length) % arr.length];
+}
+
+function buildSceneBackground(prefCode: number, cssW: number, cssH: number): HTMLCanvasElement {
+  const W = 320;
+  const H = Math.min(400, Math.max(120, Math.round((W * cssH) / Math.max(1, cssW))));
+  const cv = document.createElement("canvas");
+  cv.width = W;
+  cv.height = H;
+  cv.classList.add("scene-bg");
+  cv.setAttribute("aria-hidden", "true");
+  const ctx = cv.getContext("2d");
+  if (!ctx) return cv;
+
+  const rnd = mulberry32(prefCode * 7919 + 17);
+  const horizonY = Math.round(H * HORIZON);
+  const cx = W / 2;
+
+  const px = (x: number, y: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  };
+  const fill = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  };
+
+  // --- 空（バンド + 境目は市松ディザ） ---
+  const skyCols = ["#8cc0d8", "#9ccee2", "#acdaec", "#bee6f2"];
+  const skyEdges = [
+    0,
+    Math.round(horizonY * 0.3),
+    Math.round(horizonY * 0.58),
+    Math.round(horizonY * 0.82),
+    horizonY
+  ];
+  for (let i = 0; i < skyCols.length; i++) {
+    fill(0, skyEdges[i], W, skyEdges[i + 1] - skyEdges[i], skyCols[i]);
+  }
+  for (let i = 1; i < skyCols.length; i++) {
+    const yb = skyEdges[i];
+    for (let y = yb - 1; y <= yb; y++) {
+      if (y < 0 || y >= horizonY) continue;
+      for (let x = 0; x < W; x++) {
+        if ((x + y) % 2 === 0) px(x, y, y < yb ? skyCols[i] : skyCols[i - 1]);
+      }
+    }
   }
 
-  function band(y0: number, y1: number, fill: string): SVGElement {
-    return shape("rect", {
-      x: "0",
-      y: String(y0),
-      width: "100",
-      height: String(y1 - y0),
-      fill
-    });
+  // --- 太陽（明るい中心 + 縁。縁はディザでなじませる） ---
+  const sunX = Math.round(W * 0.78);
+  const sunY = Math.round(horizonY * 0.28);
+  for (let dy = -8; dy <= 8; dy++) {
+    for (let dx = -8; dx <= 8; dx++) {
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= 4) px(sunX + dx, sunY + dy, "#f8f0c0");
+      else if (d <= 6) px(sunX + dx, sunY + dy, "#f0dc88");
+      else if (d <= 7.2 && (dx + dy + 16) % 2 === 0) px(sunX + dx, sunY + dy, "#e4c868");
+    }
   }
 
-  const roadLeft = 50 - ROAD_HALF_BOTTOM * 100;
-  const roadRight = 50 + ROAD_HALF_BOTTOM * 100;
+  // --- ドット雲（角の丸い2ロブの塊 + 下面に淡い陰） ---
+  for (let c = 0; c < 3; c++) {
+    const cxc = Math.round(rnd() * (W - 60)) + 30;
+    const cyc = Math.round(horizonY * (0.12 + rnd() * 0.5));
+    const rx = 9 + Math.round(rnd() * 7);
+    const ry = 3 + Math.round(rnd() * 2);
+    for (let dy = -ry - 2; dy <= ry + 1; dy++) {
+      for (let dx = -rx - 5; dx <= rx + 5; dx++) {
+        const inMain = (dx / rx) ** 2 + (dy / ry) ** 2 <= 1;
+        const inLobe =
+          ((dx - rx * 0.5) / (rx * 0.6)) ** 2 + ((dy + ry * 0.6) / (ry * 0.9)) ** 2 <= 1;
+        if (!inMain && !inLobe) continue;
+        const shade = dy > ry * 0.35;
+        px(cxc + dx, cyc + dy, shade ? "#dce8f0" : "#f6fafc");
+      }
+    }
+  }
 
-  // 空（3バンド: 上ほど濃い水色）
-  svg.append(band(0, 14, "#98cce0"), band(14, 28, "#a8d8e8"), band(28, hY, "#bce4f0"));
+  // --- 遠くの山（階段状の稜線 + 面にディザの陰影） ---
+  let ridge = 6 + Math.round(rnd() * 7);
+  const ridgeYs: number[] = [];
+  let step = 0;
+  for (let x = 0; x < W; x++) {
+    if (step <= 0) {
+      step = 2 + Math.floor(rnd() * 5);
+      ridge += Math.floor(rnd() * 5) - 2;
+      ridge = Math.max(3, Math.min(15, ridge));
+    }
+    step--;
+    ridgeYs.push(horizonY - ridge);
+  }
+  for (let x = 0; x < W; x++) {
+    const top = ridgeYs[x];
+    for (let y = top; y < horizonY; y++) {
+      let c = "#7a8a9a";
+      if (y === top) c = "#8e9eae"; // 稜線のハイライト
+      else if (y > top + 2 && (x + y) % 2 === 0) c = "#6c7c8c"; // 面のディザ陰影
+      px(x, y, c);
+    }
+  }
 
-  // ドット調の太陽（四角を重ねる）
-  svg.append(
-    shape("rect", { x: "72", y: "6", width: "10", height: "10", fill: "#e8c860" }),
-    shape("rect", { x: "74", y: "8", width: "6", height: "6", fill: "#f8f0b8" })
-  );
+  // --- 草原（バンド + ディザ境目） ---
+  const grassCols = ["#96be7c", "#88b06a", "#7aa25e", "#6f965a"];
+  const gH = H - horizonY;
+  const gEdges = [
+    horizonY,
+    horizonY + Math.round(gH * 0.22),
+    horizonY + Math.round(gH * 0.5),
+    horizonY + Math.round(gH * 0.78),
+    H
+  ];
+  for (let i = 0; i < grassCols.length; i++) {
+    fill(0, gEdges[i], W, gEdges[i + 1] - gEdges[i], grassCols[i]);
+  }
+  for (let i = 1; i < grassCols.length; i++) {
+    const yb = gEdges[i];
+    for (let y = yb - 1; y <= yb; y++) {
+      if (y <= horizonY || y >= H) continue;
+      for (let x = 0; x < W; x++) {
+        if ((x + y) % 2 === 0) px(x, y, y < yb ? grassCols[i] : grassCols[i - 1]);
+      }
+    }
+  }
 
-  // ブロック雲 ×2
-  svg.append(
-    shape("rect", { x: "14", y: "10", width: "10", height: "3", fill: "#f4fafc" }),
-    shape("rect", { x: "11", y: "13", width: "16", height: "3", fill: "#f4fafc" }),
-    shape("rect", { x: "52", y: "18", width: "8", height: "2.5", fill: "#f4fafc" }),
-    shape("rect", { x: "49", y: "20.5", width: "14", height: "2.5", fill: "#f4fafc" })
-  );
+  // --- 道（土色 + 縁 + 破線の中央線 + 小石・轍） ---
+  for (let y = horizonY; y < H; y++) {
+    const half = roadHalfPx(y, horizonY, H, W);
+    const xL = Math.round(cx - half);
+    const xR = Math.round(cx + half);
+    const e = Math.max(1, Math.round(half * 0.08));
+    fill(xL, y, xR - xL + 1, 1, "#c8a86a");
+    fill(xL, y, e, 1, "#a8885a");
+    fill(xR - e + 1, y, e, 1, "#a8885a");
+    // 道と草の境目をディザでなじませる
+    if ((xL + y) % 2 === 0) px(xL - 1, y, "#a8885a");
+    if ((xR + y) % 2 === 0) px(xR + 1, y, "#a8885a");
+    // 中央線（破線）
+    if (y % 6 < 3) {
+      const cw = Math.max(1, Math.round(half * 0.05));
+      fill(cx - cw / 2, y, cw, 1, "#dcc088");
+    }
+    // 轍（うっすらディザの2本線）
+    const rutOff = half * 0.5;
+    const rw = Math.max(1, Math.round(half * 0.06));
+    for (let i = 0; i < rw; i++) {
+      const xr1 = Math.round(cx - rutOff) + i;
+      const xr2 = Math.round(cx + rutOff) - i;
+      if ((xr1 + y) % 2 === 0) px(xr1, y, "#b49460");
+      if ((xr2 + y) % 2 === 0) px(xr2, y, "#b49460");
+    }
+    // 小石（手前ほど多い）
+    if (rnd() < (half / W) * 1.6) {
+      const gx = xL + e + 1 + Math.round(rnd() * Math.max(1, xR - xL - e * 2 - 2));
+      const pc = pickSeeded(rnd, ["#b89858", "#d8b878", "#9c8050"]);
+      px(gx, y, pc);
+      if (rnd() < 0.4) px(gx + 1, y, pc);
+    }
+  }
 
-  // 遠くの山（カクカクした稜線）
-  svg.append(
-    shape("polygon", {
-      points:
-        `0,${hY} 6,${hY - 8} 12,${hY - 4} 20,${hY - 11} 28,${hY - 5} ` +
-        `36,${hY - 9} 44,${hY - 3} 54,${hY - 10} 62,${hY - 4} 72,${hY - 8} ` +
-        `80,${hY - 3} 90,${hY - 7} 100,${hY - 2} 100,${hY}`,
-      fill: "#7a8a9a"
-    })
-  );
+  // --- 草むらのタフト（奥は小さく、手前は大きめ。道の上は避ける） ---
+  const tuftCount = Math.round((W * gH) / 240);
+  for (let i = 0; i < tuftCount; i++) {
+    const gx = Math.round(rnd() * W);
+    const fr = Math.pow(rnd(), 1.2);
+    const gy = horizonY + 2 + Math.round(fr * (gH - 5));
+    const half = roadHalfPx(gy, horizonY, H, W);
+    if (Math.abs(gx - cx) < half + 2) continue; // 道の上は避ける
+    const c = rnd() < 0.6 ? "#5c8a4c" : "#a4c886";
+    const size = fr < 0.35 ? 1 : fr < 0.7 ? 2 : 3;
+    if (size === 1) {
+      px(gx, gy, c);
+    } else if (size === 2) {
+      px(gx, gy, c);
+      px(gx - 1, gy, c);
+      px(gx, gy - 1, c);
+    } else {
+      px(gx - 1, gy, c);
+      px(gx, gy, c);
+      px(gx + 1, gy, c);
+      px(gx - 1, gy - 1, c);
+      px(gx + 1, gy - 1, c);
+      px(gx, gy - 2, c);
+    }
+  }
 
-  // 草原（3バンド: 手前ほど濃い緑）
-  svg.append(
-    band(hY, hY + 10, "#90ba74"),
-    band(hY + 10, hY + 26, "#88b06a"),
-    band(hY + 26, 100, "#7aa25e")
-  );
-
-  // 土の道（消失点へ延びる台形）+ 両端の縁 + 中央線
-  svg.append(
-    shape("polygon", {
-      points: `49.2,${hY} 50.8,${hY} ${roadRight},100 ${roadLeft},100`,
-      fill: "#c8a86a"
-    }),
-    shape("polygon", {
-      points: `49.2,${hY} 49.55,${hY} ${roadLeft + 3},100 ${roadLeft},100`,
-      fill: "#a8885a"
-    }),
-    shape("polygon", {
-      points: `50.45,${hY} 50.8,${hY} ${roadRight},100 ${roadRight - 3},100`,
-      fill: "#a8885a"
-    }),
-    shape("polygon", {
-      points: `49.9,${hY + 2} 50.1,${hY + 2} 50.6,100 49.4,100`,
-      fill: "#dcc088"
-    })
-  );
-  return svg;
+  return cv;
 }
 
 // 本文をふきだし用チャンクに分割（空行・改行で分割、長い段落は句点で ≤160字）
@@ -321,7 +492,7 @@ export async function renderPrefPage(
   const scene = el("div", { class: "road-scene" });
   const sceneInner = el("div", { class: "road-scene-inner" });
   const walkersLayer = el("div", { class: "walkers-layer" });
-  sceneInner.append(buildSceneBackground(), walkersLayer);
+  sceneInner.append(walkersLayer);
 
   // 1文字ずつ縦に積む（writing-mode はフォント環境によって字送りが崩れるため使わない）
   const prefLabel = el(
@@ -346,9 +517,31 @@ export async function renderPrefPage(
   container.append(scene);
   container.classList.add("full-bleed");
 
+  // 背景ドット絵（初回1回のみ描画。サイズが大きく変わったときだけ再生成）
+  let bgCanvas: HTMLCanvasElement | null = null;
+  let bgW = 0;
+  let bgH = 0;
+
+  function regenBackground(): void {
+    const w = scene.clientWidth;
+    const h = scene.clientHeight;
+    if (!w || !h) return;
+    if (bgCanvas && Math.abs(w - bgW) < 48 && Math.abs(h - bgH) < 48) return;
+    const next = buildSceneBackground(prefCode, w, h);
+    if (bgCanvas) {
+      bgCanvas.replaceWith(next);
+    } else {
+      sceneInner.prepend(next);
+    }
+    bgCanvas = next;
+    bgW = w;
+    bgH = h;
+  }
+
   function updateSceneHeight(): void {
     const headerH = document.getElementById("header")?.offsetHeight ?? 60;
     scene.style.height = `calc(100vh - ${headerH}px)`;
+    regenBackground();
   }
   updateSceneHeight();
   window.addEventListener("resize", updateSceneHeight, { signal: ac.signal });
@@ -390,14 +583,18 @@ export async function renderPrefPage(
     }
   }
 
+  function applyWalkerX(w: Walker): void {
+    w.btn.style.left = `${(w.x * 100).toFixed(3)}%`;
+  }
+
   function spawnWalker(): void {
     if (disposed || storyPool.length === 0) return;
     const story = pick(storyPool);
     const scheme = pick(AVATAR_SCHEMES);
     const t = rand(0.15, 0.95);
     const yFrac = groundY(t);
-    const half = roadHalfAt(yFrac) * 0.82;
-    const baseX = 0.5 + rand(-1, 1) * half;
+    // 道の上に限らず、野原も含めた画面全幅を歩く
+    const homeX = rand(0.06, 0.94);
     const size = BASE_AVATAR_H * scaleAt(t);
 
     const svg = buildPersonSvg(scheme, size, !reduceMotion);
@@ -409,9 +606,11 @@ export async function renderPrefPage(
       "aria-label": `物語「${story.title}」を読む`
     }) as HTMLButtonElement;
     btn.append(bubble, svg);
-    btn.style.left = `${(baseX * 100).toFixed(2)}%`;
     btn.style.top = `${(yFrac * 100).toFixed(2)}%`;
     btn.style.zIndex = String(10 + Math.round(t * 100));
+
+    const fromLeft = Math.random() < 0.5;
+    const startX = reduceMotion ? homeX : fromLeft ? -EDGE_OUT : 1 + EDGE_OUT;
 
     const walker: Walker = {
       btn,
@@ -420,51 +619,86 @@ export async function renderPrefPage(
       story,
       scheme,
       t,
-      baseX,
+      x: startX,
+      homeX,
+      exitX: 0,
+      state: reduceMotion ? "wander" : "enter",
+      wanderT0: performance.now() / 1000,
       amp: rand(0.008, 0.035) * (0.4 + 0.6 * t),
       speed: rand(0.05, 0.16),
+      walkSpeed: rand(0.05, 0.1) * (0.55 + 0.55 * t),
       bobSpeed: rand(2.0, 3.2),
       phase: rand(0, Math.PI * 2),
+      facing: fromLeft ? 1 : -1,
       dead: false
     };
+    applyWalkerX(walker);
 
     btn.addEventListener("click", () => openStoryFromWalker(walker), { signal: ac.signal });
 
     walkersLayer.append(btn);
     walkers.push(walker);
-    requestAnimationFrame(() => btn.classList.add("alive")); // フェードイン
 
-    scheduleBubble(walker, rand(1500, 9000));
-    scheduleLifespan(walker);
-  }
-
-  function scheduleBubble(walker: Walker, delay: number): void {
-    later(() => {
-      if (walker.dead) return;
-      walker.bubble.classList.add("show");
+    if (reduceMotion) {
+      // 静止配置 + フェードの従来演出
+      requestAnimationFrame(() => btn.classList.add("alive"));
+      scheduleBubble(walker, rand(1500, 9000));
       later(() => {
-        walker.bubble.classList.remove("show");
-        if (!walker.dead) scheduleBubble(walker, rand(5000, 16000));
-      }, rand(3200, 5600));
-    }, delay);
+        retireWalkerFade(walker);
+        later(() => spawnWalker(), rand(400, 1800));
+      }, rand(15000, 40000));
+    } else {
+      // 画面外から歩いて入場（フェードなし）
+      btn.classList.add("alive");
+    }
   }
 
-  function scheduleLifespan(walker: Walker): void {
-    later(() => {
-      retireWalker(walker);
-      // 少し間をおいて、別のランダムな物語のヒトが現れる
-      later(() => spawnWalker(), rand(400, 1800));
-    }, rand(15000, 40000));
+  // 入場完了: うろうろ開始 + ふきだし + 寿命（退場開始）を予約
+  function beginWander(walker: Walker, nowSec: number): void {
+    walker.state = "wander";
+    walker.wanderT0 = nowSec;
+    walker.x = walker.homeX;
+    scheduleBubble(walker, rand(1000, 7000));
+    later(() => beginExit(walker), rand(15000, 40000));
   }
 
-  function retireWalker(walker: Walker): void {
+  function beginExit(walker: Walker): void {
+    if (walker.dead || walker.state === "leave") return;
+    walker.state = "leave";
+    walker.exitX = walker.x < 0.5 ? -EDGE_OUT : 1 + EDGE_OUT; // 近い方の端へ歩き去る
+    walker.bubble.classList.remove("show");
+  }
+
+  function despawnWalker(walker: Walker): void {
     if (walker.dead) return;
     walker.dead = true;
-    walker.btn.classList.remove("alive"); // フェードアウト
+    walker.btn.remove();
+    walkers = walkers.filter((w) => w !== walker);
+    later(() => spawnWalker(), rand(400, 1800));
+  }
+
+  // reduced-motion 用: フェードで退場
+  function retireWalkerFade(walker: Walker): void {
+    if (walker.dead) return;
+    walker.dead = true;
+    walker.btn.classList.remove("alive");
     later(() => {
       walker.btn.remove();
       walkers = walkers.filter((w) => w !== walker);
     }, 1500);
+  }
+
+  function scheduleBubble(walker: Walker, delay: number): void {
+    later(() => {
+      if (walker.dead || walker.state === "leave") return;
+      walker.bubble.classList.add("show");
+      later(() => {
+        walker.bubble.classList.remove("show");
+        if (!walker.dead && walker.state !== "leave") {
+          scheduleBubble(walker, rand(5000, 16000));
+        }
+      }, rand(3200, 5600));
+    }, delay);
   }
 
   function resetWalkers(): void {
@@ -480,21 +714,51 @@ export async function renderPrefPage(
     if (storyPool.length === 0) return;
     const n = Math.min(8, Math.max(3, storyPool.length));
     for (let i = 0; i < n; i++) {
-      later(() => spawnWalker(), i * rand(150, 500));
+      later(() => spawnWalker(), i * rand(150, 700));
     }
   }
 
-  // ---- うろうろ+歩行の揺れ（rAF。reduced-motion 時は静止） ----
+  // ---- 歩行・うろうろ（rAF。reduced-motion 時は回さない） ----
+  let lastNow = 0;
+
   function frame(now: number): void {
     if (disposed) return;
     const sec = now / 1000;
+    const dt = lastNow ? Math.min(0.1, sec - lastNow) : 0;
+    lastNow = sec;
+
+    const walkedOut: Walker[] = [];
     for (const w of walkers) {
       if (w.dead) continue;
-      const x = w.baseX + Math.sin(sec * w.speed * Math.PI * 2 + w.phase) * w.amp;
-      w.btn.style.left = `${(x * 100).toFixed(3)}%`;
-      const bob = Math.sin(sec * w.bobSpeed * Math.PI + w.phase) * 2.4 * scaleAt(w.t);
-      w.svg.style.transform = `translateY(${bob.toFixed(2)}px)`;
+
+      if (w.state === "enter") {
+        const dir: 1 | -1 = w.homeX >= w.x ? 1 : -1;
+        w.x += dir * w.walkSpeed * dt;
+        w.facing = dir;
+        if ((dir === 1 && w.x >= w.homeX) || (dir === -1 && w.x <= w.homeX)) {
+          beginWander(w, sec);
+        }
+      } else if (w.state === "leave") {
+        const dir: 1 | -1 = w.exitX >= w.x ? 1 : -1;
+        w.x += dir * w.walkSpeed * dt;
+        w.facing = dir;
+        if ((dir === 1 && w.x >= w.exitX) || (dir === -1 && w.x <= w.exitX)) {
+          walkedOut.push(w);
+          continue;
+        }
+      } else {
+        // wander: 滞在位置のまわりをゆっくり行き来（sin(0)=0 から滑らかに）
+        const ph = (sec - w.wanderT0) * w.speed * Math.PI * 2;
+        w.x = w.homeX + Math.sin(ph) * w.amp;
+        w.facing = Math.cos(ph) >= 0 ? 1 : -1;
+      }
+
+      applyWalkerX(w);
+      const bob = Math.sin(sec * w.bobSpeed * Math.PI + w.phase) * 2.0 * scaleAt(w.t);
+      w.svg.style.transform = `translateY(${bob.toFixed(2)}px) scaleX(${w.facing})`;
     }
+    for (const w of walkedOut) despawnWalker(w);
+
     rafId = requestAnimationFrame(frame);
   }
 
