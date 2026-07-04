@@ -200,10 +200,12 @@ Vite + vanilla TypeScript の SPA。History API ルーティング + `public/_re
   （/story/:id の通常ページは共有リンクの着地先として残す）。
 
 ### SNS共有
-1. 「私の物語として共有」: テキスト `「{title}」 — わたしの物語 #WorldTale` + URL `{origin}/story/{id}`。
+1. 「私の物語として共有」（作者用）: テキスト `「{title}」 — わたしの物語 #WorldTale` + URL `{origin}/story/{id}`。
    **マイページ（/me）の自分の物語それぞれにのみ**設置する。閲覧画面（/story/:id・読書モード）には出さない。
-2. 「そっと共有」: テキスト `世界のどこかに私の物語を追加しました #WorldTale` + URL `{origin}/`（トップのみ。物語へのリンクは含めない）。
-   **閲覧画面（/story/:id・読書モード）とマイページの両方**に設置する。
+2. 「そっと共有」（作者用・匿名）: テキスト `世界のどこかに私の物語を追加しました #WorldTale` + URL `{origin}/`（トップのみ。物語へのリンクは含めない）。
+   **マイページのみ**に設置する。
+3. 「共有」（読者用）: テキスト `{都道府県名}でこんな物語を見つけました。 #WorldTale` + URL `{origin}/story/{id}`。
+   **閲覧画面（/story/:id・読書モード）**に設置する。
 
 いずれも X intent (`https://twitter.com/intent/tweet?text=...&url=...`) と、
 `navigator.share` が使える端末では Web Share API も提供。

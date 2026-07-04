@@ -9,7 +9,7 @@ import {
   reactToStory,
   submitReport
 } from "../api";
-import { storyMetaText } from "../prefectures";
+import { PREF_BY_CODE, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, openModal } from "../ui";
 import { navigate } from "../router";
 
@@ -20,7 +20,42 @@ function twitterIntentUrl(text: string, url: string): string {
 
 const QUIET_TEXT = "世界のどこかに私の物語を追加しました #WorldTale";
 
-// 「そっと共有」のみ（閲覧画面用: /story/:id と読書モード）
+// 閲覧側の「共有」（/story/:id と読書モード）:
+// 「〜県でこんな物語を見つけました。」+ その物語へのリンク
+export function buildViewerShareRow(prefName: string, storyId: string): HTMLElement {
+  const text = `${prefName}でこんな物語を見つけました。 #WorldTale`;
+  const url = `${location.origin}/story/${storyId}`;
+  const shareRow = el("div", { class: "share-row" });
+  shareRow.append(
+    el(
+      "a",
+      {
+        class: "btn btn-outline",
+        href: twitterIntentUrl(text, url),
+        target: "_blank",
+        rel: "noopener noreferrer"
+      },
+      ["共有"]
+    )
+  );
+  if (typeof navigator.share === "function") {
+    shareRow.append(
+      el(
+        "button",
+        {
+          class: "btn btn-outline",
+          onclick: () => {
+            void navigator.share({ text, url }).catch(() => {});
+          }
+        },
+        ["この端末で共有"]
+      )
+    );
+  }
+  return shareRow;
+}
+
+// 作者の匿名共有「そっと共有」（マイページの共有行で使用）
 export function buildQuietShareRow(): HTMLElement {
   const anonUrl = `${location.origin}/`;
   const shareRow = el("div", { class: "share-row" });
@@ -183,8 +218,8 @@ export async function renderStoryPage(
   reactionRow.append(likeBtn, metBtn);
   container.append(reactionRow);
 
-  // ---- 共有（閲覧画面は「そっと共有」のみ） ----
-  container.append(buildQuietShareRow());
+  // ---- 共有（閲覧側: 「〜県でこんな物語を見つけました。」+ 物語リンク） ----
+  container.append(buildViewerShareRow(PREF_BY_CODE[story.prefecture]?.name ?? "", story.id));
 
   // ---- 編集・削除（本人のみ） ----
   if (isLoggedIn()) {

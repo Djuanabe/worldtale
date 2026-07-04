@@ -53,6 +53,8 @@ const photos = [
 const reactions = new Set();
 const reports = [];
 const tokens = new Map(); // token -> userId
+// アップロードされた画像の実データ（メモリ保持。再起動で消える）
+const photoBlobs = new Map(); // id -> { type, data(Buffer) }
 
 const SEASON_SVG = {
   spring: ["#f6d7e0", "#e8b4c8", "#b56576", "桜"],
@@ -116,9 +118,38 @@ function summary(s) {
     createdAt: s.createdAt, likeCount: c.likeCount, metCount: c.metCount,
   };
 }
+function photoUrl(p, origin) {
+  // 実データがあればそれを、なければ季節色のプレースホルダSVGを配信
+  return photoBlobs.has(p.id) ? `${origin}/img/${p.id}` : `${origin}/img/${p.id}.svg`;
+}
 function photoJson(p, origin) {
   const u = users.find((x) => x.id === p.userId);
-  return { id: p.id, url: `${origin}/img/${p.id}.svg`, season: p.season, username: u?.username, prefecture: p.prefecture };
+  return { id: p.id, url: photoUrl(p, origin), season: p.season, username: u?.username, prefecture: p.prefecture };
+}
+
+// multipart/form-data の簡易パーサ（テキストフィールド+ファイル1つ想定）
+function parseMultipart(buf, boundary) {
+  const parts = [];
+  const bnd = Buffer.from(`--${boundary}`);
+  let pos = buf.indexOf(bnd);
+  while (pos !== -1) {
+    const next = buf.indexOf(bnd, pos + bnd.length);
+    if (next === -1) break;
+    const start = pos + bnd.length + 2; // 直後の \r\n を飛ばす
+    const end = next - 2; // 手前の \r\n を除く
+    const part = buf.subarray(start, end);
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd !== -1) {
+      const header = part.subarray(0, headerEnd).toString("utf8");
+      const data = part.subarray(headerEnd + 4);
+      const nameM = header.match(/name="([^"]+)"/);
+      const fileM = header.match(/filename="([^"]*)"/);
+      const typeM = header.match(/Content-Type:\s*([^\r\n]+)/i);
+      parts.push({ name: nameM?.[1] ?? "", filename: fileM?.[1], type: typeM?.[1], data });
+    }
+    pos = next;
+  }
+  return parts;
 }
 function authUser(req) {
   const h = req.headers.authorization ?? "";
@@ -149,9 +180,14 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // 画像 (SVGプレースホルダ)
-  const img = path.match(/^\/img\/(p\d+|new-[\w-]+)\.svg$/);
+  // 画像 (アップロード実データ or SVGプレースホルダ)
+  const img = path.match(/^\/img\/([\w-]+?)(\.svg)?$/);
   if (img && req.method === "GET") {
+    const blob = photoBlobs.get(img[1]);
+    if (blob) {
+      res.writeHead(200, { "Content-Type": blob.type, "Access-Control-Allow-Origin": "*" });
+      return res.end(blob.data);
+    }
     const p = photos.find((x) => x.id === img[1]);
     const season = p?.season ?? "spring";
     const seed = Number((img[1].match(/\d+/) ?? [1])[0]);
@@ -225,12 +261,13 @@ const server = http.createServer(async (req, res) => {
     if (path === "/api/photos" && req.method === "POST") {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
-      // multipart のテキストフィールドだけ簡易パース(動作確認用。ファイル内容は捨てる)
-      const raw = (await readBody(req)).toString("latin1");
-      const field = (name) => {
-        const m = raw.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`));
-        return m ? m[1] : null;
-      };
+      // multipart をパースし、画像の実データもメモリに保持して配信する
+      const buf = await readBody(req);
+      const bm = (req.headers["content-type"] ?? "").match(/boundary=(?:"([^"]+)"|([^;]+))/);
+      const parts = bm ? parseMultipart(buf, bm[1] || bm[2]) : [];
+      const field = (name) =>
+        parts.find((p) => p.name === name && p.filename === undefined)?.data.toString("utf8").trim() ?? null;
+      const filePart = parts.find((p) => p.name === "file" && p.filename !== undefined);
       const pref = Number(field("prefecture")) || 13;
       const seasons = ["spring", "summer", "autumn", "winter"];
       const season = seasons.includes(field("season")) ? field("season") : "spring";
@@ -238,8 +275,12 @@ const server = http.createServer(async (req, res) => {
       if (photos.some((p) => p.userId === u.id && p.prefecture === pref && p.season === season))
         return err(res, 409, "PHOTO_SLOT_TAKEN", "この場所・季節にはすでにあなたの写真があります");
       const id = `new-${crypto.randomUUID().slice(0, 8)}`;
-      photos.push({ id, userId: u.id, storyId, prefecture: pref, season });
-      return json(res, 201, { id, url: `${origin}/img/${id}.svg`, prefecture: pref, season });
+      if (filePart && filePart.data.length > 0) {
+        photoBlobs.set(id, { type: filePart.type || "image/jpeg", data: filePart.data });
+      }
+      const photo = { id, userId: u.id, storyId, prefecture: pref, season };
+      photos.push(photo);
+      return json(res, 201, { id, url: photoUrl(photo, origin), prefecture: pref, season });
     }
     const delPhoto = path.match(/^\/api\/photos\/([\w-]+)$/);
     if (delPhoto && req.method === "DELETE") {
@@ -247,6 +288,7 @@ const server = http.createServer(async (req, res) => {
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
       const i = photos.findIndex((p) => p.id === delPhoto[1] && p.userId === u.id);
       if (i < 0) return err(res, 404, "NOT_FOUND", "写真が見つかりません");
+      photoBlobs.delete(photos[i].id);
       photos.splice(i, 1);
       return json(res, 200, { ok: true });
     }
@@ -341,7 +383,7 @@ const server = http.createServer(async (req, res) => {
           username: u.username, userPublicId: u.publicId,
           createdAt: s.createdAt, updatedAt: s.updatedAt,
           ...counts(s.id),
-          photos: photos.filter((p) => p.storyId === s.id).map((p) => ({ id: p.id, url: `${origin}/img/${p.id}.svg`, season: p.season })),
+          photos: photos.filter((p) => p.storyId === s.id).map((p) => ({ id: p.id, url: photoUrl(p, origin), season: p.season })),
         });
       }
       if (req.method === "PUT") {

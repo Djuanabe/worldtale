@@ -12,7 +12,7 @@ import { PREF_BY_CODE, storyMetaText } from "../prefectures";
 import { el, errorNode, yearOptions } from "../ui";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
-import { buildQuietShareRow, openReportModal } from "./story";
+import { buildViewerShareRow, openReportModal } from "./story";
 
 // ---- シーン定数 ----
 const HORIZON = 0.44; // 地平線（シーン高さに対する割合）
@@ -1121,7 +1121,7 @@ export async function renderPrefPage(
 
       actions.append(
         el("div", { class: "reaction-row" }, [likeBtn, metBtn]),
-        buildQuietShareRow(), // 閲覧画面は「そっと共有」のみ
+        buildViewerShareRow(PREF_BY_CODE[s.prefecture]?.name ?? "", s.id), // 「〜県でこんな物語を見つけました。」
         el("p", {}, [
           el("a", { href: `/story/${s.id}`, "data-link": true, class: "reader-bookmark" }, [
             "しおりページで読む →"
