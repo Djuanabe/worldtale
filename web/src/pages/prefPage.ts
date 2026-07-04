@@ -4,6 +4,7 @@ import {
   getReactions,
   getStory,
   isLoggedIn,
+  listPhotos,
   listStories,
   reactToStory
 } from "../api";
@@ -48,12 +49,13 @@ interface Walker {
   t: number; // 奥行き 0=遠い 1=近い
   x: number; // 現在の横位置 0..1（幅に対する割合）
   homeX: number; // 滞在の中心位置
+  targetX: number; // いま歩いて向かっている先
   exitX: number; // 退場先（画面外）
   state: WalkerState;
-  wanderT0: number; // うろうろ開始時刻(sec)
-  amp: number;
-  speed: number; // うろうろの周期
+  mode: "walk" | "stand"; // wander 中: 横歩き / 正面を向いて立ち止まり
+  standUntil: number; // 立ち止まり終了時刻(sec)
   walkSpeed: number; // 入退場の歩行速度（幅割合/秒）
+  wanderSpeed: number; // 滞在中の歩行速度
   bobSpeed: number;
   phase: number;
   facing: 1 | -1;
@@ -88,11 +90,12 @@ function scaleAt(t: number): number {
   return 0.3 + 0.7 * t;
 }
 
-// ---- ドット絵スプライト（16×24、白塗り+暗色輪郭、歩行4フェーズ） ----
+// ---- ドット絵スプライト（16×24、白塗り+暗色輪郭） ----
 // O=輪郭 W=白 L=明グレー D=中間グレー .=透過
+// ポーズは「正面（立ち止まり）」と「横向き（歩行2フレーム）」の2系統
 
-// 頭〜肩（全フレーム共通、rows 0..9）
-const SPRITE_HEAD: string[] = [
+// 正面の頭〜肩（rows 0..9）
+const FRONT_HEAD: string[] = [
   "......OOOO......",
   ".....OWWWWO.....",
   "....OWWWWWWO....",
@@ -105,8 +108,8 @@ const SPRITE_HEAD: string[] = [
   "....OWWWWWWO...."
 ];
 
-// 直立/通過ポーズ（rows 10..23）: 腕は下ろし、脚は揃える
-const SPRITE_PASS: string[] = [
+// 正面の直立ポーズ（rows 10..23）: 両腕を下ろし、脚を揃える
+const FRONT_STAND: string[] = [
   "..OWOWWWWWWOWO..",
   "..OWOWWWWWWOWO..",
   "..OWOWWLLWWOWO..",
@@ -123,30 +126,55 @@ const SPRITE_PASS: string[] = [
   "....OOOOOOOO...."
 ];
 
-// 歩幅ポーズ（rows 10..23）: 脚を開き、腕を前後に振る（左右非対称）
-const SPRITE_STRIDE: string[] = [
-  "..OWOWWWWWWOWO..",
-  "..OWOWWWWWWOWO..",
-  "..OLOWWLLWWOWO..",
-  "..OOOWWLLWWOWO..",
-  "....OWWLLWWOWO..",
-  "....OWWLLWWOLO..",
+// 横向きの頭〜肩（rows 0..9）: 1px の鼻先で向きを出す（scaleX で左右反転）
+const SIDE_HEAD: string[] = [
+  "......OOOO......",
+  ".....OWWWWO.....",
   "....OWWWWWWO....",
+  "....OWWWWWWO....",
+  "....OWWWWWWWO...",
+  "....OWWWWWWWO...",
+  "....OWWWWWWO....",
+  ".....OWWWWO.....",
+  ".....OWDWWO.....",
+  ".....OWWWWO....."
+];
+
+// 横向きの歩幅ポーズ（rows 10..23）: 脚を前後に開き、腕を前後に振る
+const SIDE_STRIDE: string[] = [
+  ".....OWWWWO.....",
+  ".....OWWWWO.....",
+  ".....OWLLWO.....",
+  "...OWOWLLWOWO...",
+  "...OWOWLLWOWO...",
+  "...OLOWLLWOLO...",
+  "...OOOWWWWOOO...",
+  ".....OWWWWO.....",
   "....OWWOOWWO....",
   "...OWWO..OWWO...",
   "...OWWO..OWWO...",
   "..OWWO....OWWO..",
   "..OWWO....OWWO..",
-  ".OWWO......OWWO.",
-  ".OOOO......OOOO."
+  "..OOOO....OOOO.."
 ];
 
-function mirrorRows(rows: string[]): string[] {
-  return rows.map((r) => [...r].reverse().join(""));
-}
-
-// 反対側の歩幅（腕振りも反転して2〜4フレーム相当のサイクルにする）
-const SPRITE_STRIDE_M = mirrorRows(SPRITE_STRIDE);
+// 横向きの通過ポーズ（rows 10..23）: 脚が交差して重なる瞬間
+const SIDE_PASS: string[] = [
+  ".....OWWWWO.....",
+  ".....OWWWWO.....",
+  ".....OWLLWO.....",
+  ".....OWLLWO.....",
+  ".....OWLLWO.....",
+  ".....OLLLWO.....",
+  ".....OWWWWO.....",
+  ".....OWWWWO.....",
+  ".....OWWWWO.....",
+  ".....OWWWO......",
+  ".....OWWWO......",
+  ".....OWWWO......",
+  ".....OWWWO......",
+  ".....OOOO......."
+];
 
 function spriteColor(ch: string, scheme: SpriteScheme): string | null {
   switch (ch) {
@@ -194,35 +222,41 @@ function appendSpriteRows(
   });
 }
 
-// 白塗りドット人間スプライト。walk=true で歩行4フェーズ（CSSで切り替え）
-function buildPersonSvg(scheme: SpriteScheme, heightPx: number, walk: boolean): SVGSVGElement {
+// 白塗りドット人間スプライト。
+// pose: "front"=正面で立ち止まり / "walk"=横向き歩行（2フレームをCSSで交互表示）
+function buildPersonSvg(
+  scheme: SpriteScheme,
+  heightPx: number,
+  pose: "front" | "walk"
+): SVGSVGElement {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 16 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("shape-rendering", "crispEdges");
-  svg.classList.add("walker-svg");
-  if (walk) svg.classList.add("sprite-walk");
+  svg.classList.add("walker-svg", pose);
   svg.style.height = `${heightPx}px`;
   svg.style.width = `${(heightPx * 16) / 24}px`;
 
-  const head = document.createElementNS(ns, "g");
-  appendSpriteRows(ns, head, SPRITE_HEAD, 0, scheme);
-
-  const makeFrame = (cls: string, rows: string[]): SVGGElement => {
+  const makePose = (cls: string, headRows: string[], bodyRows: string[]): SVGGElement => {
     const g = document.createElementNS(ns, "g");
     g.setAttribute("class", cls);
-    appendSpriteRows(ns, g, rows, 10, scheme);
+    appendSpriteRows(ns, g, headRows, 0, scheme);
+    appendSpriteRows(ns, g, bodyRows, 10, scheme);
     return g;
   };
 
   svg.append(
-    head,
-    makeFrame("frame-s1", SPRITE_STRIDE),
-    makeFrame("frame-p", SPRITE_PASS),
-    makeFrame("frame-s2", SPRITE_STRIDE_M)
+    makePose("pose-front", FRONT_HEAD, FRONT_STAND),
+    makePose("pose-side-a", SIDE_HEAD, SIDE_STRIDE),
+    makePose("pose-side-b", SIDE_HEAD, SIDE_PASS)
   );
   return svg;
+}
+
+function setPose(walker: Walker, pose: "front" | "walk"): void {
+  walker.svg.classList.toggle("front", pose === "front");
+  walker.svg.classList.toggle("walk", pose === "walk");
 }
 
 // ---- ドット絵の背景（低解像度 canvas に1ドットずつ描き pixelated 拡大） ----
@@ -236,7 +270,12 @@ function pickSeeded(rnd: () => number, arr: string[]): string {
   return arr[Math.floor(rnd() * arr.length) % arr.length];
 }
 
-function buildSceneBackground(prefCode: number, cssW: number, cssH: number): HTMLCanvasElement {
+function buildSceneBackground(
+  prefCode: number,
+  cssW: number,
+  cssH: number,
+  photo: HTMLImageElement | null
+): HTMLCanvasElement {
   const W = 320;
   const H = Math.min(400, Math.max(120, Math.round((W * cssH) / Math.max(1, cssW))));
   const cv = document.createElement("canvas");
@@ -312,7 +351,8 @@ function buildSceneBackground(prefCode: number, cssW: number, cssH: number): HTM
     }
   }
 
-  // --- 遠くの山（階段状の稜線 + 面にディザの陰影） ---
+  // --- 遠景: 写真があればドット処理して地平線の上の帯に合成、なければ山 ---
+  // （乱数消費を写真の有無に依らず同じにするため、稜線は常に計算する）
   let ridge = 6 + Math.round(rnd() * 7);
   const ridgeYs: number[] = [];
   let step = 0;
@@ -325,15 +365,55 @@ function buildSceneBackground(prefCode: number, cssW: number, cssH: number): HTM
     step--;
     ridgeYs.push(horizonY - ridge);
   }
-  for (let x = 0; x < W; x++) {
-    const top = ridgeYs[x];
-    for (let y = top; y < horizonY; y++) {
-      let c = "#7a8a9a";
-      if (y === top) c = "#8e9eae"; // 稜線のハイライト
-      else if (y > top + 2 && (x + y) % 2 === 0) c = "#6c7c8c"; // 面のディザ陰影
-      px(x, y, c);
+
+  const drawMountains = () => {
+    for (let x = 0; x < W; x++) {
+      const top = ridgeYs[x];
+      for (let y = top; y < horizonY; y++) {
+        let c = "#7a8a9a";
+        if (y === top) c = "#8e9eae"; // 稜線のハイライト
+        else if (y > top + 2 && (x + y) % 2 === 0) c = "#6c7c8c"; // 面のディザ陰影
+        px(x, y, c);
+      }
+    }
+  };
+
+  let photoDrawn = false;
+  if (photo && photo.naturalWidth > 0) {
+    try {
+      // 地平線の上の帯に cover でトリミングして描画
+      const top = Math.round(horizonY * 0.32);
+      const stripH = horizonY - top;
+      const scale = Math.max(W / photo.naturalWidth, stripH / photo.naturalHeight);
+      const sw = W / scale;
+      const sh = stripH / scale;
+      const sx = (photo.naturalWidth - sw) / 2;
+      const sy = (photo.naturalHeight - sh) * 0.4;
+      ctx.drawImage(photo, sx, sy, sw, sh, 0, top, W, stripH);
+
+      // 背景と同じドット感になるよう色数を量子化（各ch 24階調刻み）
+      const img = ctx.getImageData(0, top, W, stripH);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = Math.min(255, Math.round(d[i] / 24) * 24);
+        d[i + 1] = Math.min(255, Math.round(d[i + 1] / 24) * 24);
+        d[i + 2] = Math.min(255, Math.round(d[i + 2] / 24) * 24);
+      }
+      ctx.putImageData(img, 0, top);
+
+      // 上端は空とディザでなじませる（25% → 50% → 25% の市松）
+      const skyC = skyCols[skyCols.length - 1];
+      for (let x = 0; x < W; x++) {
+        if ((x + top) % 4 !== 0) px(x, top, skyC);
+        if ((x + top + 1) % 2 === 0) px(x, top + 1, skyC);
+        if ((x + top + 2) % 4 === 0) px(x, top + 2, skyC);
+      }
+      photoDrawn = true;
+    } catch {
+      photoDrawn = false; // CORS等で読めなければ山にフォールバック
     }
   }
+  if (!photoDrawn) drawMountains();
 
   // --- 草原（バンド + ディザ境目） ---
   const grassCols = ["#96be7c", "#88b06a", "#7aa25e", "#6f965a"];
@@ -517,17 +597,18 @@ export async function renderPrefPage(
   container.append(scene);
   container.classList.add("full-bleed");
 
-  // 背景ドット絵（初回1回のみ描画。サイズが大きく変わったときだけ再生成）
+  // 背景ドット絵（初回1回のみ描画。サイズが大きく変わったとき・写真が届いたときだけ再生成）
   let bgCanvas: HTMLCanvasElement | null = null;
   let bgW = 0;
   let bgH = 0;
+  let scenePhoto: HTMLImageElement | null = null;
 
   function regenBackground(): void {
     const w = scene.clientWidth;
     const h = scene.clientHeight;
     if (!w || !h) return;
     if (bgCanvas && Math.abs(w - bgW) < 48 && Math.abs(h - bgH) < 48) return;
-    const next = buildSceneBackground(prefCode, w, h);
+    const next = buildSceneBackground(prefCode, w, h, scenePhoto);
     if (bgCanvas) {
       bgCanvas.replaceWith(next);
     } else {
@@ -537,6 +618,27 @@ export async function renderPrefPage(
     bgW = w;
     bgH = h;
   }
+
+  // この県の写真があれば1枚をランダムに選び、ドット処理して遠景に合成する
+  void (async () => {
+    try {
+      const res = await listPhotos(prefCode);
+      if (disposed || res.photos.length === 0) return;
+      const chosen = res.photos[Math.floor(Math.random() * res.photos.length)];
+      const img = new Image();
+      img.crossOrigin = "anonymous"; // 量子化(getImageData)に必要
+      img.onload = () => {
+        if (disposed) return;
+        scenePhoto = img;
+        bgW = 0; // 強制再生成
+        bgH = 0;
+        regenBackground();
+      };
+      img.src = chosen.url;
+    } catch {
+      // 写真は飾りなので失敗しても何もしない（山のまま）
+    }
+  })();
 
   function updateSceneHeight(): void {
     const headerH = document.getElementById("header")?.offsetHeight ?? 60;
@@ -587,9 +689,19 @@ export async function renderPrefPage(
     w.btn.style.left = `${(w.x * 100).toFixed(3)}%`;
   }
 
+  // 同時に出ているヒトは全員別ユーザーの物語を持つ
+  const activeUsers = new Set<string>();
+
+  function availableStories(): StorySummary[] {
+    return storyPool.filter((s) => !activeUsers.has(s.userPublicId));
+  }
+
   function spawnWalker(): void {
-    if (disposed || storyPool.length === 0) return;
-    const story = pick(storyPool);
+    if (disposed) return;
+    const candidates = availableStories();
+    if (candidates.length === 0) return; // 空きユーザーがいなければ増やさない
+    const story = pick(candidates);
+    activeUsers.add(story.userPublicId);
     const scheme = pick(AVATAR_SCHEMES);
     const t = rand(0.15, 0.95);
     const yFrac = groundY(t);
@@ -597,7 +709,7 @@ export async function renderPrefPage(
     const homeX = rand(0.06, 0.94);
     const size = BASE_AVATAR_H * scaleAt(t);
 
-    const svg = buildPersonSvg(scheme, size, !reduceMotion);
+    const svg = buildPersonSvg(scheme, size, reduceMotion ? "front" : "walk");
     const bubble = el("span", { class: "walker-bubble" }, [story.title]);
     bubble.style.fontSize = `${(0.66 + 0.24 * t).toFixed(2)}rem`;
 
@@ -612,6 +724,7 @@ export async function renderPrefPage(
     const fromLeft = Math.random() < 0.5;
     const startX = reduceMotion ? homeX : fromLeft ? -EDGE_OUT : 1 + EDGE_OUT;
 
+    const walkSpeed = rand(0.05, 0.1) * (0.55 + 0.55 * t);
     const walker: Walker = {
       btn,
       svg,
@@ -621,12 +734,13 @@ export async function renderPrefPage(
       t,
       x: startX,
       homeX,
+      targetX: homeX,
       exitX: 0,
       state: reduceMotion ? "wander" : "enter",
-      wanderT0: performance.now() / 1000,
-      amp: rand(0.008, 0.035) * (0.4 + 0.6 * t),
-      speed: rand(0.05, 0.16),
-      walkSpeed: rand(0.05, 0.1) * (0.55 + 0.55 * t),
+      mode: "stand",
+      standUntil: reduceMotion ? Number.POSITIVE_INFINITY : 0,
+      walkSpeed,
+      wanderSpeed: walkSpeed * rand(0.4, 0.7),
       bobSpeed: rand(2.0, 3.2),
       phase: rand(0, Math.PI * 2),
       facing: fromLeft ? 1 : -1,
@@ -653,11 +767,13 @@ export async function renderPrefPage(
     }
   }
 
-  // 入場完了: うろうろ開始 + ふきだし + 寿命（退場開始）を予約
+  // 入場完了: まず正面を向いてひと休み → 横歩きと立ち止まりを繰り返す
   function beginWander(walker: Walker, nowSec: number): void {
     walker.state = "wander";
-    walker.wanderT0 = nowSec;
     walker.x = walker.homeX;
+    walker.mode = "stand";
+    walker.standUntil = nowSec + rand(1.2, 3.5);
+    setPose(walker, "front");
     scheduleBubble(walker, rand(1000, 7000));
     later(() => beginExit(walker), rand(15000, 40000));
   }
@@ -667,11 +783,13 @@ export async function renderPrefPage(
     walker.state = "leave";
     walker.exitX = walker.x < 0.5 ? -EDGE_OUT : 1 + EDGE_OUT; // 近い方の端へ歩き去る
     walker.bubble.classList.remove("show");
+    setPose(walker, "walk");
   }
 
   function despawnWalker(walker: Walker): void {
     if (walker.dead) return;
     walker.dead = true;
+    activeUsers.delete(walker.story.userPublicId);
     walker.btn.remove();
     walkers = walkers.filter((w) => w !== walker);
     later(() => spawnWalker(), rand(400, 1800));
@@ -681,6 +799,7 @@ export async function renderPrefPage(
   function retireWalkerFade(walker: Walker): void {
     if (walker.dead) return;
     walker.dead = true;
+    activeUsers.delete(walker.story.userPublicId);
     walker.btn.classList.remove("alive");
     later(() => {
       walker.btn.remove();
@@ -692,12 +811,22 @@ export async function renderPrefPage(
     later(() => {
       if (walker.dead || walker.state === "leave") return;
       walker.bubble.classList.add("show");
+      const durMs = rand(3200, 5600);
+      // 話すあいだは立ち止まって正面を向く
+      if (walker.state === "wander" && !reduceMotion) {
+        walker.mode = "stand";
+        walker.standUntil = Math.max(
+          walker.standUntil,
+          performance.now() / 1000 + durMs / 1000 + rand(0.4, 1.4)
+        );
+        setPose(walker, "front");
+      }
       later(() => {
         walker.bubble.classList.remove("show");
         if (!walker.dead && walker.state !== "leave") {
           scheduleBubble(walker, rand(5000, 16000));
         }
-      }, rand(3200, 5600));
+      }, durMs);
     }, delay);
   }
 
@@ -708,11 +837,13 @@ export async function renderPrefPage(
       w.btn.remove();
     }
     walkers = [];
+    activeUsers.clear();
   }
 
   function spawnInitialWalkers(): void {
     if (storyPool.length === 0) return;
-    const n = Math.min(8, Math.max(3, storyPool.length));
+    const uniqueUsers = new Set(storyPool.map((s) => s.userPublicId)).size;
+    const n = Math.min(8, uniqueUsers);
     for (let i = 0; i < n; i++) {
       later(() => spawnWalker(), i * rand(150, 700));
     }
@@ -746,16 +877,40 @@ export async function renderPrefPage(
           walkedOut.push(w);
           continue;
         }
+      } else if (w.mode === "stand") {
+        // 正面を向いて立ち止まり。時間が来たら次の目的地へ横歩き
+        if (sec >= w.standUntil) {
+          let target = Math.min(0.94, Math.max(0.06, w.homeX + rand(-0.22, 0.22)));
+          if (Math.abs(target - w.x) < 0.03) {
+            target = Math.min(
+              0.94,
+              Math.max(0.06, w.x + (Math.random() < 0.5 ? -1 : 1) * rand(0.08, 0.2))
+            );
+          }
+          w.targetX = target;
+          w.mode = "walk";
+          setPose(w, "walk");
+        }
       } else {
-        // wander: 滞在位置のまわりをゆっくり行き来（sin(0)=0 から滑らかに）
-        const ph = (sec - w.wanderT0) * w.speed * Math.PI * 2;
-        w.x = w.homeX + Math.sin(ph) * w.amp;
-        w.facing = Math.cos(ph) >= 0 ? 1 : -1;
+        // 横歩きで目的地へ。着いたら正面を向いて立ち止まる
+        const dir: 1 | -1 = w.targetX >= w.x ? 1 : -1;
+        w.x += dir * w.wanderSpeed * dt;
+        w.facing = dir;
+        if ((dir === 1 && w.x >= w.targetX) || (dir === -1 && w.x <= w.targetX)) {
+          w.mode = "stand";
+          w.standUntil = sec + rand(1.5, 4.5);
+          setPose(w, "front");
+        }
       }
 
       applyWalkerX(w);
-      const bob = Math.sin(sec * w.bobSpeed * Math.PI + w.phase) * 2.0 * scaleAt(w.t);
-      w.svg.style.transform = `translateY(${bob.toFixed(2)}px) scaleX(${w.facing})`;
+      const walking = w.state !== "wander" || w.mode === "walk";
+      if (walking) {
+        const bob = Math.sin(sec * w.bobSpeed * Math.PI + w.phase) * 2.0 * scaleAt(w.t);
+        w.svg.style.transform = `translateY(${bob.toFixed(2)}px) scaleX(${w.facing})`;
+      } else {
+        w.svg.style.transform = "scaleX(1)";
+      }
     }
     for (const w of walkedOut) despawnWalker(w);
 
@@ -822,7 +977,7 @@ export async function renderPrefPage(
     const stage = el("div", { class: "reader-stage" });
     const stream = el("div", { class: "reader-stream" });
     const bottomRow = el("div", { class: "reader-bottom" });
-    const avatarSvg = buildPersonSvg(scheme, 170, false); // 大アバターは静止フレーム
+    const avatarSvg = buildPersonSvg(scheme, 170, "front"); // 大アバターは正面で静止
     avatarSvg.classList.add("reader-avatar");
     const nextBtn = el("button", { class: "btn reader-advance" }, ["つづき"]) as HTMLButtonElement;
     bottomRow.append(avatarSvg, nextBtn);

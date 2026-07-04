@@ -777,67 +777,44 @@ textarea {
   image-rendering: pixelated;
 }
 
-/* 歩行4フェーズ（開脚 → 直立 → 逆開脚 → 直立 を steps でカクカク切り替え）
-   静止時は直立フレーム(frame-p)のみ表示 */
-.walker-svg .frame-s1,
-.walker-svg .frame-s2 {
+/* ポーズ切り替え: 正面(front)=立ち止まり / 横向き(walk)=歩行2フレーム交互
+   既定は正面。walk クラスで横向きフレームを steps アニメで交互表示 */
+.walker-svg .pose-side-a,
+.walker-svg .pose-side-b {
   opacity: 0;
 }
 
-.sprite-walk .frame-s1 {
-  animation: wtStepS1 0.8s steps(1, end) infinite;
+.walker-svg.walk .pose-front {
+  opacity: 0;
 }
 
-.sprite-walk .frame-p {
-  animation: wtStepP 0.8s steps(1, end) infinite;
+.walker-svg.walk .pose-side-a {
+  animation: wtSideA 0.5s steps(1, end) infinite;
 }
 
-.sprite-walk .frame-s2 {
-  animation: wtStepS2 0.8s steps(1, end) infinite;
+.walker-svg.walk .pose-side-b {
+  animation: wtSideB 0.5s steps(1, end) infinite;
 }
 
-@keyframes wtStepS1 {
+@keyframes wtSideA {
   0%,
-  24% {
-    opacity: 1;
-  }
-  25%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes wtStepP {
-  0%,
-  24% {
-    opacity: 0;
-  }
-  25%,
   49% {
     opacity: 1;
   }
   50%,
-  74% {
-    opacity: 0;
-  }
-  75%,
   100% {
-    opacity: 1;
+    opacity: 0;
   }
 }
 
-@keyframes wtStepS2 {
+@keyframes wtSideB {
   0%,
   49% {
     opacity: 0;
   }
   50%,
-  74% {
-    opacity: 1;
-  }
-  75%,
   100% {
-    opacity: 0;
+    opacity: 1;
   }
 }
 
@@ -1141,20 +1118,19 @@ textarea {
     animation: none;
   }
 
-  .sprite-walk .frame-s1,
-  .sprite-walk .frame-p,
-  .sprite-walk .frame-s2,
+  .walker-svg .pose-side-a,
+  .walker-svg .pose-side-b,
   .msg-cursor {
     animation: none;
   }
 
-  .sprite-walk .frame-p {
-    opacity: 1;
+  .walker-svg .pose-front {
+    opacity: 1 !important;
   }
 
-  .sprite-walk .frame-s1,
-  .sprite-walk .frame-s2 {
-    opacity: 0;
+  .walker-svg .pose-side-a,
+  .walker-svg .pose-side-b {
+    opacity: 0 !important;
   }
 }
 
