@@ -27,9 +27,22 @@ MAIN_LAT_MAX = 45.8
 MAIN_LON_MIN = 128.3
 MAIN_LON_MAX = 146.2
 
-# 沖縄本島まわり（インセットとして左上に移す）
+# 沖縄本島まわり（インセットとして下方中央=列島の南の海上に移す）
 OKI_LAT_MIN, OKI_LAT_MAX = 25.7, 27.1
 OKI_LON_MIN, OKI_LON_MAX = 126.5, 128.5
+OKI_OFF_X, OKI_OFF_Y = 64, 133  # インセット左上のセル座標
+
+# 琵琶湖（滋賀県ポリゴンは湖面を含むため、明示的に水域として彫り込む）
+BIWA_POLYGON = [
+    (136.07, 35.52),
+    (136.25, 35.42),
+    (136.28, 35.30),
+    (136.13, 35.12),
+    (135.95, 34.98),
+    (135.87, 35.05),
+    (135.94, 35.22),
+    (136.00, 35.38),
+]
 
 
 def decimate(ring, max_pts=400):
@@ -126,10 +139,18 @@ def main():
                     gx, gy = cell_of(lon, lat)
                     paint(code, lon, lat, int(gx), int(gy))
 
-    # --- 沖縄: 同じ縮尺でラスタライズして左上のインセットへ ---
+    # --- 琵琶湖を水域として彫り込む（滋賀の陸セルを '.' に戻す） ---
+    for cy in range(GRID_H):
+        for cx in range(grid_w):
+            if grid[cy][cx] == ".":
+                continue
+            lon, lat = lonlat_of(cx, cy)
+            if point_in_ring(lon, lat, BIWA_POLYGON):
+                grid[cy][cx] = "."
+
+    # --- 沖縄: 同じ縮尺でラスタライズして下方中央のインセットへ ---
     oki_w = round((OKI_LON_MAX - OKI_LON_MIN) * kx / lon_span * grid_w)
     oki_h = round((OKI_LAT_MAX - OKI_LAT_MIN) / lat_span * GRID_H)
-    OKI_OFF_X, OKI_OFF_Y = 3, 3
     for oy in range(oki_h):
         for ox in range(oki_w):
             lon = OKI_LON_MIN + (ox + 0.5) / oki_w * (OKI_LON_MAX - OKI_LON_MIN)
@@ -194,7 +215,10 @@ def main():
             f.write(f"  {c}: [{x}, {y}],\n")
         f.write("};\n\n")
         f.write("// 沖縄インセット枠（UI で区切り線を引くための範囲）\n")
-        f.write(f"export const OKINAWA_INSET = {{ x: 1, y: 1, w: {oki_w + 4}, h: {oki_h + 4} }};\n\n")
+        f.write(
+            f"export const OKINAWA_INSET = "
+            f"{{ x: {OKI_OFF_X - 2}, y: {OKI_OFF_Y - 2}, w: {oki_w + 4}, h: {oki_h + 4} }};\n\n"
+        )
         f.write("export function prefCodeAt(x: number, y: number): number | null {\n")
         f.write("  const row = JAPAN_MAP_ROWS[y];\n")
         f.write("  if (!row) return null;\n")

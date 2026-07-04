@@ -29,6 +29,37 @@ body {
   padding: 0;
 }
 
+/* ---- スクロールバー（RPGウィンドウ調に統一） ---- */
+
+:root {
+  /* Firefox: つまみ=ウィンドウ枠色, トレック=背景色 */
+  scrollbar-color: #5a5a8a var(--c-bg);
+}
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--c-bg);
+  border: 2px solid #2a2a55;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c-win);
+  border: 2px solid var(--c-win-text);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  border-color: var(--c-gold);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--c-bg);
+}
+
 body {
   background: var(--c-bg);
   color: var(--c-win-text);
