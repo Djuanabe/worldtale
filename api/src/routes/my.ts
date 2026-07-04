@@ -11,7 +11,7 @@ my.get('/stories', requireAuth, async (c) => {
   const sb = getSupabase(c.env);
   const { data, error } = await sb
     .from('stories')
-    .select('id, title, body, prefecture, year, views, is_hidden, created_at, updated_at')
+    .select('id, title, body, prefecture, municipality, year, season, views, is_hidden, created_at, updated_at')
     .eq('user_id', c.get('userId'))
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -25,7 +25,9 @@ my.get('/stories', requireAuth, async (c) => {
       id: r.id,
       title: r.title,
       prefecture: r.prefecture,
+      municipality: r.municipality ?? null,
       year: r.year,
+      season: r.season ?? null,
       isHidden: r.is_hidden,
       createdAt: r.created_at,
       updatedAt: r.updated_at,

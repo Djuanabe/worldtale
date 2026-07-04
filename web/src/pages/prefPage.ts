@@ -8,7 +8,7 @@ import {
   listStories,
   reactToStory
 } from "../api";
-import { PREF_BY_CODE } from "../prefectures";
+import { PREF_BY_CODE, storyMetaText } from "../prefectures";
 import { el, errorNode, yearOptions } from "../ui";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
@@ -1032,7 +1032,8 @@ export async function renderPrefPage(
       chunks = chunkBody(story.body);
       loadingBubble.remove();
       const titleBubble = el("div", { class: "reader-bubble reader-title" }, [
-        `「${story.title}」`
+        `「${story.title}」`,
+        el("div", { class: "reader-meta" }, [storyMetaText(story)])
       ]);
       pushBubble(titleBubble);
     })();

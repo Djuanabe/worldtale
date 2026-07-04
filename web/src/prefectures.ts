@@ -76,3 +76,19 @@ export const SEASONS: { key: string; label: string }[] = [
 export function seasonLabel(key: string): string {
   return SEASONS.find((s) => s.key === key)?.label ?? key;
 }
+
+// 物語のメタ情報（都道府県・市区町村・年・季節）を表示用テキストにする。
+// municipality/season が null の古いデータでも崩れないよう、あれば足す形にする。
+export function storyMetaText(input: {
+  prefecture: number;
+  municipality?: string | null;
+  year: number;
+  season?: string | null;
+}): string {
+  const place = input.municipality
+    ? `${prefName(input.prefecture)} ${input.municipality}`
+    : prefName(input.prefecture);
+  const parts = [place, `${input.year}年`];
+  if (input.season) parts.push(seasonLabel(input.season));
+  return parts.join(" ・ ");
+}

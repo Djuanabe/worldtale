@@ -1051,6 +1051,13 @@ textarea {
   text-shadow: 1px 1px 0 #000;
 }
 
+.reader-meta {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--c-dim-text);
+  text-shadow: none;
+}
+
 /* ▼ つづきインジケータ（点滅） */
 .msg-cursor {
   display: inline-block;

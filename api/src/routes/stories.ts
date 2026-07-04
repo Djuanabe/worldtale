@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { REACTION_TYPES } from '../types';
+import { REACTION_TYPES, SEASONS } from '../types';
 import { getSupabase, publicPhotoUrl } from '../lib/supabase';
 import { requireAuth } from '../lib/auth';
 import { badRequest, forbidden, isUniqueViolation, notFound } from '../lib/errors';
@@ -21,7 +21,7 @@ stories.get('/', async (c) => {
 
   let query = sb
     .from('stories')
-    .select('id, title, body, prefecture, year, created_at, user:users!inner(username, public_id)', {
+    .select('id, title, body, prefecture, municipality, year, season, created_at, user:users!inner(username, public_id)', {
       count: 'exact',
     })
     .eq('is_hidden', false);
@@ -54,7 +54,9 @@ stories.get('/', async (c) => {
       title: r.title,
       excerpt: excerpt(r.body, 120),
       prefecture: r.prefecture,
+      municipality: r.municipality ?? null,
       year: r.year,
+      season: r.season ?? null,
       username: r.user?.username ?? '',
       userPublicId: r.user?.public_id ?? '',
       createdAt: r.created_at,
@@ -73,13 +75,15 @@ stories.post('/', requireAuth, async (c) => {
   const title = requireString((body as any).title, 'title', 1, 100);
   const text = requireString((body as any).body, 'body', 1, 20000);
   const prefecture = parsePrefecture((body as any).prefecture);
+  const municipality = requireString((body as any).municipality, 'municipality', 1, 50);
   const year = parseYear((body as any).year);
+  const season = oneOf((body as any).season, SEASONS, 'season');
 
   const sb = getSupabase(c.env);
   const { data, error } = await sb
     .from('stories')
-    .insert({ user_id: c.get('userId'), title, body: text, prefecture, year })
-    .select('id, title, body, prefecture, year, created_at, updated_at')
+    .insert({ user_id: c.get('userId'), title, body: text, prefecture, municipality, year, season })
+    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
     .single();
   if (error) throw error;
 
@@ -89,7 +93,9 @@ stories.post('/', requireAuth, async (c) => {
       title: data.title,
       body: data.body,
       prefecture: data.prefecture,
+      municipality: data.municipality,
       year: data.year,
+      season: data.season,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     },
@@ -180,7 +186,7 @@ stories.get('/:id', async (c) => {
 
   const { data: story, error } = await sb
     .from('stories')
-    .select('id, title, body, prefecture, year, created_at, updated_at, is_hidden, user:users!inner(username, public_id)')
+    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at, is_hidden, user:users!inner(username, public_id)')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -206,7 +212,9 @@ stories.get('/:id', async (c) => {
     title: s.title,
     body: s.body,
     prefecture: s.prefecture,
+    municipality: s.municipality ?? null,
     year: s.year,
+    season: s.season ?? null,
     username: s.user?.username ?? '',
     userPublicId: s.user?.public_id ?? '',
     createdAt: s.created_at,
@@ -242,13 +250,15 @@ stories.put('/:id', requireAuth, async (c) => {
   if (b.title !== undefined) patch.title = requireString(b.title, 'title', 1, 100);
   if (b.body !== undefined) patch.body = requireString(b.body, 'body', 1, 20000);
   if (b.prefecture !== undefined) patch.prefecture = parsePrefecture(b.prefecture);
+  if (b.municipality !== undefined) patch.municipality = requireString(b.municipality, 'municipality', 1, 50);
   if (b.year !== undefined) patch.year = parseYear(b.year);
+  if (b.season !== undefined) patch.season = oneOf(b.season, SEASONS, 'season');
 
   const { data: updated, error: uErr } = await sb
     .from('stories')
     .update(patch)
     .eq('id', id)
-    .select('id, title, body, prefecture, year, created_at, updated_at')
+    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
     .single();
   if (uErr) throw uErr;
 
@@ -257,7 +267,9 @@ stories.put('/:id', requireAuth, async (c) => {
     title: updated.title,
     body: updated.body,
     prefecture: updated.prefecture,
+    municipality: updated.municipality,
     year: updated.year,
+    season: updated.season,
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
   });

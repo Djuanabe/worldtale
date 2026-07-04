@@ -9,7 +9,7 @@ import {
   reactToStory,
   submitReport
 } from "../api";
-import { prefName } from "../prefectures";
+import { storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, openModal } from "../ui";
 import { navigate } from "../router";
 
@@ -128,7 +128,7 @@ export async function renderStoryPage(
   const header = el("div", { class: "story-header" }, [
     el("h1", { class: "page-title", style: "border-bottom:none" }, [story.title]),
     el("p", { class: "story-meta" }, [
-      `${prefName(story.prefecture)} ・ ${story.year}年 ・ `,
+      `${storyMetaText(story)} ・ `,
       el("a", { href: `/u/${story.userPublicId}`, "data-link": true }, [story.username])
     ])
   ]);

@@ -1,10 +1,10 @@
 import { ApiRequestError, StoryDetail, createStory, isLoggedIn, uploadPhoto } from "../api";
-import { PREFECTURES, SEASONS } from "../prefectures";
 import { el, pageTitle } from "../ui";
 import { navigate } from "../router";
 import { buildStoryFormFields, storyNoticeBox } from "./storyForm";
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export async function renderWritePage(
   _params: Record<string, string>,
@@ -18,7 +18,22 @@ export async function renderWritePage(
 
   container.append(pageTitle("物語を書く"));
 
-  const { titleInput, bodyInput, prefSelect, yearSelect, fieldRows } = buildStoryFormFields();
+  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, fieldRows } =
+    buildStoryFormFields();
+
+  const photoInput = el("input", {
+    type: "file",
+    accept: "image/jpeg,image/png,image/webp"
+  }) as HTMLInputElement;
+  const photoField = el("div", { class: "form-field" }, [
+    el("label", {}, ["風景写真（任意）"]),
+    photoInput,
+    el("p", { class: "hint" }, [
+      "その土地・季節の風景写真を1枚添えられます。顔が写っているものは投稿しないでください。",
+      el("br"),
+      "1ユーザーにつき1場所×1季節1枚まで。5MBまで（JPEG/PNG/WebP）。"
+    ])
+  ]);
 
   const agreeCheckbox = el("input", { type: "checkbox" }) as HTMLInputElement;
   const submitBtn = el("button", { class: "btn", type: "submit", disabled: true }, [
@@ -35,6 +50,7 @@ export async function renderWritePage(
     {},
     [
       ...fieldRows,
+      photoField,
       storyNoticeBox(),
       el("div", { class: "checkbox-row" }, [
         agreeCheckbox,
@@ -47,14 +63,12 @@ export async function renderWritePage(
 
   container.append(el("div", { class: "card" }, [form]));
 
-  const photoHost = el("div");
-  container.append(photoHost);
-
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!agreeCheckbox.checked) return;
     const title = titleInput.value.trim();
     const body = bodyInput.value;
+    const municipality = municipalityInput.value.trim();
     if (title.length < 1) {
       status.textContent = "タイトルを入力してください。";
       return;
@@ -63,20 +77,35 @@ export async function renderWritePage(
       status.textContent = "本文を入力してください。";
       return;
     }
+    if (municipality.length < 1 || municipality.length > 50) {
+      status.textContent = "市区町村を1〜50文字で入力してください。";
+      return;
+    }
+
+    const photoFile = photoInput.files?.[0] ?? null;
+    if (photoFile) {
+      if (photoFile.size > MAX_PHOTO_BYTES) {
+        status.textContent = "写真は5MBまでです。別のファイルを選んでください。";
+        return;
+      }
+      if (!ALLOWED_PHOTO_TYPES.includes(photoFile.type)) {
+        status.textContent = "写真はJPEG/PNG/WebPのみ対応しています。";
+        return;
+      }
+    }
+
     submitBtn.disabled = true;
     status.textContent = "投稿しています…";
+    let story: StoryDetail;
     try {
-      const story: StoryDetail = await createStory({
+      story = await createStory({
         title,
         body,
         prefecture: Number(prefSelect.value),
-        year: Number(yearSelect.value)
+        municipality,
+        year: Number(yearSelect.value),
+        season: seasonSelect.value
       });
-      status.textContent = "投稿しました。";
-      form.querySelectorAll("input, textarea, select, button").forEach((elm) => {
-        (elm as HTMLInputElement).disabled = true;
-      });
-      photoHost.append(buildPhotoUploadSection(story));
     } catch (err) {
       submitBtn.disabled = false;
       if (err instanceof ApiRequestError) {
@@ -84,80 +113,32 @@ export async function renderWritePage(
       } else {
         status.textContent = "投稿に失敗しました。";
       }
-    }
-  });
-}
-
-function buildPhotoUploadSection(story: StoryDetail): HTMLElement {
-  const wrap = el("div", { class: "card" }, [
-    el("h3", {}, ["風景写真を添える（任意）"]),
-    el("p", { class: "hint" }, [
-      "その場所・季節の風景写真を1枚添えられます。顔が写っている写真は投稿しないでください（5MBまで）。"
-    ])
-  ]);
-
-  const prefSelect = el("select") as HTMLSelectElement;
-  for (const p of PREFECTURES) {
-    const opt = el("option", { value: String(p.code) }, [p.name]) as HTMLOptionElement;
-    if (p.code === story.prefecture) opt.selected = true;
-    prefSelect.append(opt);
-  }
-
-  const seasonSelect = el("select") as HTMLSelectElement;
-  for (const s of SEASONS) {
-    seasonSelect.append(el("option", { value: s.key }, [s.label]));
-  }
-
-  const fileInput = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp" }) as HTMLInputElement;
-  const uploadStatus = el("p", { class: "hint" }, []);
-  const uploadBtn = el("button", { class: "btn" }, ["写真をアップロード"]) as HTMLButtonElement;
-
-  uploadBtn.addEventListener("click", async () => {
-    const file = fileInput.files?.[0];
-    if (!file) {
-      uploadStatus.textContent = "写真を選んでください。";
       return;
     }
-    if (file.size > MAX_PHOTO_BYTES) {
-      uploadStatus.textContent = "5MBを超える写真はアップロードできません。";
+
+    // 物語の投稿はここで成功。以降、写真アップロードの失敗は物語投稿の成功と区別して案内する。
+    if (!photoFile) {
+      navigate(`/story/${story.id}`);
       return;
     }
-    uploadBtn.disabled = true;
-    uploadStatus.textContent = "アップロード中…";
+
+    status.textContent = "投稿しました。写真をアップロードしています…";
     try {
       await uploadPhoto({
-        file,
-        prefecture: Number(prefSelect.value),
-        season: seasonSelect.value,
+        file: photoFile,
+        prefecture: story.prefecture,
+        season: story.season ?? seasonSelect.value,
         storyId: story.id
       });
-      uploadStatus.textContent = "写真をアップロードしました。";
-      uploadBtn.disabled = true;
-      fileInput.disabled = true;
-      prefSelect.disabled = true;
-      seasonSelect.disabled = true;
     } catch (err) {
-      uploadBtn.disabled = false;
       if (err instanceof ApiRequestError && err.code === "PHOTO_SLOT_TAKEN") {
-        uploadStatus.textContent = "この場所・季節にはすでにあなたの写真があります。";
-      } else if (err instanceof ApiRequestError) {
-        uploadStatus.textContent = `アップロードに失敗しました: ${err.message}`;
+        window.alert(
+          "物語は投稿されました。写真はこの場所・季節にすでにあなたの1枚があるため追加されませんでした。"
+        );
       } else {
-        uploadStatus.textContent = "アップロードに失敗しました。";
+        window.alert("物語は投稿されました。写真のアップロードには失敗しました。");
       }
     }
+    navigate(`/story/${story.id}`);
   });
-
-  wrap.append(
-    el("div", { class: "form-field" }, [el("label", {}, ["都道府県"]), prefSelect]),
-    el("div", { class: "form-field" }, [el("label", {}, ["季節"]), seasonSelect]),
-    el("div", { class: "form-field" }, [el("label", {}, ["写真ファイル"]), fileInput]),
-    uploadBtn,
-    uploadStatus,
-    el("p", { style: "margin-top:16px" }, [
-      el("a", { href: `/story/${story.id}`, "data-link": true }, ["投稿した物語を見る →"])
-    ])
-  );
-
-  return wrap;
 }

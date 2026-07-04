@@ -12,7 +12,9 @@ export interface StorySummary {
   title: string;
   excerpt: string;
   prefecture: number;
+  municipality: string | null;
   year: number;
+  season: string | null;
   username: string;
   userPublicId: string;
   createdAt: string;
@@ -31,7 +33,9 @@ export interface StoryDetail {
   title: string;
   body: string;
   prefecture: number;
+  municipality: string | null;
   year: number;
+  season: string | null;
   username: string;
   userPublicId: string;
   createdAt: string;
@@ -208,14 +212,23 @@ export function createStory(input: {
   title: string;
   body: string;
   prefecture: number;
+  municipality: string;
   year: number;
+  season: string;
 }): Promise<StoryDetail> {
   return request("/api/stories", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function updateStory(
   id: string,
-  input: Partial<{ title: string; body: string; prefecture: number; year: number }>
+  input: Partial<{
+    title: string;
+    body: string;
+    prefecture: number;
+    municipality: string;
+    year: number;
+    season: string;
+  }>
 ): Promise<StoryDetail> {
   return request(`/api/stories/${encodeURIComponent(id)}`, {
     method: "PUT",

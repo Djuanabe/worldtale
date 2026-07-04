@@ -1,5 +1,5 @@
 import { MyStory, Photo, deletePhoto, isLoggedIn, myPhotos, myStories } from "../api";
-import { prefName, seasonLabel } from "../prefectures";
+import { prefName, seasonLabel, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, pageTitle } from "../ui";
 import { navigate } from "../router";
 import { buildAuthorShareRow } from "./story";
@@ -70,7 +70,7 @@ function buildStoryTable(stories: MyStory[]): HTMLElement {
     tbody.append(
       el("tr", {}, [
         el("td", {}, [el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])]),
-        el("td", {}, [`${prefName(s.prefecture)} ・ ${s.year}年`]),
+        el("td", {}, [storyMetaText(s)]),
         el("td", {}, [String(s.views)]),
         el("td", {}, [String(s.likeCount)]),
         el("td", {}, [String(s.metCount)]),

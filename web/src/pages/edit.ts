@@ -48,12 +48,15 @@ export async function renderEditPage(
   container.innerHTML = "";
   container.append(pageTitle("物語を編集する"));
 
-  const { titleInput, bodyInput, prefSelect, yearSelect, fieldRows } = buildStoryFormFields({
-    title: story.title,
-    body: story.body,
-    prefecture: story.prefecture,
-    year: story.year
-  });
+  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, fieldRows } =
+    buildStoryFormFields({
+      title: story.title,
+      body: story.body,
+      prefecture: story.prefecture,
+      municipality: story.municipality,
+      year: story.year,
+      season: story.season
+    });
 
   const submitBtn = el("button", { class: "btn", type: "submit" }, ["保存する"]) as HTMLButtonElement;
   const status = el("p", { class: "hint" }, []);
@@ -82,12 +85,17 @@ export async function renderEditPage(
     e.preventDefault();
     const title = titleInput.value.trim();
     const body = bodyInput.value;
+    const municipality = municipalityInput.value.trim();
     if (title.length < 1) {
       status.textContent = "タイトルを入力してください。";
       return;
     }
     if (body.length < 1) {
       status.textContent = "本文を入力してください。";
+      return;
+    }
+    if (municipality.length < 1 || municipality.length > 50) {
+      status.textContent = "市区町村を1〜50文字で入力してください。";
       return;
     }
     submitBtn.disabled = true;
@@ -97,7 +105,9 @@ export async function renderEditPage(
         title,
         body,
         prefecture: Number(prefSelect.value),
-        year: Number(yearSelect.value)
+        municipality,
+        year: Number(yearSelect.value),
+        season: seasonSelect.value
       });
       navigate(`/story/${id}`);
     } catch (err) {

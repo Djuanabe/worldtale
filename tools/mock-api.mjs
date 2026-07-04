@@ -13,10 +13,10 @@ const users = [
 ];
 
 let storySeq = 0;
-function seedStory(userId, prefecture, year, title, body, views, likes, mets) {
+function seedStory(userId, prefecture, municipality, year, season, title, body, views, likes, mets) {
   storySeq++;
   return {
-    id: `s${storySeq}`, userId, prefecture, year, title, body,
+    id: `s${storySeq}`, userId, prefecture, municipality, year, season, title, body,
     views, likes, mets,
     createdAt: new Date(Date.UTC(year, (storySeq * 3) % 12, (storySeq * 7) % 27 + 1)).toISOString(),
     updatedAt: null,
@@ -24,19 +24,19 @@ function seedStory(userId, prefecture, year, title, body, views, likes, mets) {
 }
 
 const stories = [
-  seedStory("u1", 13, 2019, "はじめての一人暮らしと商店街の夕暮れ",
+  seedStory("u1", 13, "杉並区", 2019, "spring", "はじめての一人暮らしと商店街の夕暮れ",
     "上京して最初の春、駅前の商店街で買ったコロッケの味を今でも覚えている。\n夕方五時のチャイムが鳴ると、八百屋のおじさんが「今日も一日おつかれさん」と声をかけてくれた。\n知らない街が、少しずつ私の街になっていった一年だった。", 128, 24, 3),
-  seedStory("u1", 26, 2021, "鴨川の飛び石と、あの夏の夕立",
+  seedStory("u1", 26, "京都市", 2021, "summer", "鴨川の飛び石と、あの夏の夕立",
     "引っ越した先の京都で、鴨川の飛び石を渡るのが日課になった。\n夕立に降られて橋の下で雨宿りをしたとき、隣にいたおばあさんが飴をくれた。\n「夕立は待てば止むし、待つのも悪うない」と笑っていた。", 342, 56, 8),
-  seedStory("u1", 47, 2022, "初めての沖縄、海の色に言葉を失う",
+  seedStory("u1", 47, "那覇市", 2022, "summer", "初めての沖縄、海の色に言葉を失う",
     "旅行で訪れた沖縄。飛行機の窓から見えた海の色に、隣の席の子どもと一緒に歓声を上げた。\n市場で食べたてんぷらの熱さと、夕方のスコールの匂いを忘れない。", 89, 31, 1),
-  seedStory("u2", 13, 2019, "終電を逃した夜、歩いて帰った十キロ",
+  seedStory("u2", 13, "世田谷区", 2019, "winter", "終電を逃した夜、歩いて帰った十キロ",
     "残業続きの冬、終電を逃して家まで歩いた。\n深夜の環七はトラックばかりで、コンビニの灯りがやけに暖かかった。\nあの夜見た明け方の空の色は、たぶん一生忘れない。", 210, 42, 12),
-  seedStory("u2", 1, 2020, "雪かきと、隣人と、味噌汁",
+  seedStory("u2", 1, "札幌市", 2020, "winter", "雪かきと、隣人と、味噌汁",
     "北海道に移住して最初の冬。朝五時の雪かきで腰をやられた。\n見かねた隣の家のご夫婦が手伝ってくれて、そのまま朝ごはんまでごちそうになった。\n雪は大変だが、雪のおかげで人と話す。", 156, 38, 5),
-  seedStory("u3", 15, 2018, "米どころの夏、祖母の背中",
+  seedStory("u3", 15, "長岡市", 2018, "summer", "米どころの夏、祖母の背中",
     "夏休みはいつも新潟の祖母の家で過ごした。\n朝の田んぼの匂い、縁側のスイカ、蚊帳の中で聞いた雨の音。\n祖母が亡くなって、あの夏がどれだけ贅沢だったか知った。", 421, 88, 15),
-  seedStory("u3", 13, 2020, "静まりかえった春の渋谷で",
+  seedStory("u3", 13, "渋谷区", 2020, "spring", "静まりかえった春の渋谷で",
     "誰もいないスクランブル交差点を見た春。\n世界がこんなふうに止まるなんて思ってもみなかった。\nそれでも桜は咲いていて、なんだか泣きそうになった。", 533, 102, 44),
 ];
 
@@ -110,7 +110,8 @@ function summary(s) {
   return {
     id: s.id, title: s.title,
     excerpt: s.body.replace(/\n/g, " ").slice(0, 120),
-    prefecture: s.prefecture, year: s.year,
+    prefecture: s.prefecture, municipality: s.municipality ?? null,
+    year: s.year, season: s.season ?? null,
     username: u.username, userPublicId: u.publicId,
     createdAt: s.createdAt, likeCount: c.likeCount, metCount: c.metCount,
   };
@@ -224,13 +225,20 @@ const server = http.createServer(async (req, res) => {
     if (path === "/api/photos" && req.method === "POST") {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
-      // multipartは解析せず、クエリなしの簡易受理(動作確認用)。制約チェックのみ模倣
-      await readBody(req);
-      const pref = 13, season = "spring"; // 動作確認用固定
+      // multipart のテキストフィールドだけ簡易パース(動作確認用。ファイル内容は捨てる)
+      const raw = (await readBody(req)).toString("latin1");
+      const field = (name) => {
+        const m = raw.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`));
+        return m ? m[1] : null;
+      };
+      const pref = Number(field("prefecture")) || 13;
+      const seasons = ["spring", "summer", "autumn", "winter"];
+      const season = seasons.includes(field("season")) ? field("season") : "spring";
+      const storyId = field("storyId") || null;
       if (photos.some((p) => p.userId === u.id && p.prefecture === pref && p.season === season))
         return err(res, 409, "PHOTO_SLOT_TAKEN", "この場所・季節にはすでにあなたの写真があります");
       const id = `new-${crypto.randomUUID().slice(0, 8)}`;
-      photos.push({ id, userId: u.id, storyId: null, prefecture: pref, season });
+      photos.push({ id, userId: u.id, storyId, prefecture: pref, season });
       return json(res, 201, { id, url: `${origin}/img/${id}.svg`, prefecture: pref, season });
     }
     const delPhoto = path.match(/^\/api\/photos\/([\w-]+)$/);
@@ -282,9 +290,11 @@ const server = http.createServer(async (req, res) => {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
       const b = JSON.parse((await readBody(req)).toString() || "{}");
-      if (!b.title || !b.body || !b.prefecture || !b.year)
-        return err(res, 400, "VALIDATION", "title/body/prefecture/year が必要です");
-      const s = seedStory(u.id, Number(b.prefecture), Number(b.year), String(b.title), String(b.body), 0, 0, 0);
+      if (!b.title || !b.body || !b.prefecture || !b.municipality || !b.year || !b.season)
+        return err(res, 400, "VALIDATION", "title/body/prefecture/municipality/year/season が必要です");
+      if (!["spring", "summer", "autumn", "winter"].includes(b.season))
+        return err(res, 400, "VALIDATION", "season が不正です");
+      const s = seedStory(u.id, Number(b.prefecture), String(b.municipality), Number(b.year), b.season, String(b.title), String(b.body), 0, 0, 0);
       s.likes = 0; s.mets = 0;
       stories.push(s);
       return json(res, 201, { ...summary(s), body: s.body, photos: [] });
@@ -323,7 +333,9 @@ const server = http.createServer(async (req, res) => {
         s.views++;
         const u = users.find((x) => x.id === s.userId);
         return json(res, 200, {
-          id: s.id, title: s.title, body: s.body, prefecture: s.prefecture, year: s.year,
+          id: s.id, title: s.title, body: s.body,
+          prefecture: s.prefecture, municipality: s.municipality ?? null,
+          year: s.year, season: s.season ?? null,
           username: u.username, userPublicId: u.publicId,
           createdAt: s.createdAt, updatedAt: s.updatedAt,
           ...counts(s.id),
@@ -338,7 +350,9 @@ const server = http.createServer(async (req, res) => {
         if (b.title !== undefined) s.title = String(b.title);
         if (b.body !== undefined) s.body = String(b.body);
         if (b.prefecture !== undefined) s.prefecture = Number(b.prefecture);
+        if (b.municipality !== undefined) s.municipality = String(b.municipality);
         if (b.year !== undefined) s.year = Number(b.year);
+        if (b.season !== undefined) s.season = String(b.season);
         s.updatedAt = new Date().toISOString();
         return json(res, 200, { ...summary(s), body: s.body, updatedAt: s.updatedAt, photos: [] });
       }
