@@ -294,6 +294,8 @@ const server = http.createServer(async (req, res) => {
         return err(res, 400, "VALIDATION", "title/body/prefecture/municipality/year/season が必要です");
       if (!["spring", "summer", "autumn", "winter"].includes(b.season))
         return err(res, 400, "VALIDATION", "season が不正です");
+      if (stories.some((x) => x.userId === u.id && x.prefecture === Number(b.prefecture) && x.season === b.season))
+        return err(res, 409, "STORY_SLOT_TAKEN", "この場所・季節にはすでにあなたの物語があります");
       const s = seedStory(u.id, Number(b.prefecture), String(b.municipality), Number(b.year), b.season, String(b.title), String(b.body), 0, 0, 0);
       s.likes = 0; s.mets = 0;
       stories.push(s);
@@ -347,12 +349,16 @@ const server = http.createServer(async (req, res) => {
         if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
         if (s.userId !== u.id) return err(res, 403, "FORBIDDEN", "権限がありません");
         const b = JSON.parse((await readBody(req)).toString() || "{}");
+        const nextPref = b.prefecture !== undefined ? Number(b.prefecture) : s.prefecture;
+        const nextSeason = b.season !== undefined ? String(b.season) : s.season;
+        if (stories.some((x) => x.id !== s.id && x.userId === u.id && x.prefecture === nextPref && x.season === nextSeason))
+          return err(res, 409, "STORY_SLOT_TAKEN", "この場所・季節にはすでにあなたの物語があります");
         if (b.title !== undefined) s.title = String(b.title);
         if (b.body !== undefined) s.body = String(b.body);
-        if (b.prefecture !== undefined) s.prefecture = Number(b.prefecture);
+        if (b.prefecture !== undefined) s.prefecture = nextPref;
         if (b.municipality !== undefined) s.municipality = String(b.municipality);
         if (b.year !== undefined) s.year = Number(b.year);
-        if (b.season !== undefined) s.season = String(b.season);
+        if (b.season !== undefined) s.season = nextSeason;
         s.updatedAt = new Date().toISOString();
         return json(res, 200, { ...summary(s), body: s.body, updatedAt: s.updatedAt, photos: [] });
       }

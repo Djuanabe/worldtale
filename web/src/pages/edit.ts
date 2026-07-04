@@ -112,7 +112,10 @@ export async function renderEditPage(
       navigate(`/story/${id}`);
     } catch (err) {
       submitBtn.disabled = false;
-      if (err instanceof ApiRequestError) {
+      if (err instanceof ApiRequestError && err.code === "STORY_SLOT_TAKEN") {
+        status.textContent =
+          "この場所・季節にはすでにあなたの物語があります。1つの場所×季節に書けるのは1つまでです。";
+      } else if (err instanceof ApiRequestError) {
         status.textContent = `保存に失敗しました: ${err.message}`;
       } else {
         status.textContent = "保存に失敗しました。";

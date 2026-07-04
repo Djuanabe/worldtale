@@ -3,7 +3,7 @@ import type { Env } from '../types';
 import { REACTION_TYPES, SEASONS } from '../types';
 import { getSupabase, publicPhotoUrl } from '../lib/supabase';
 import { requireAuth } from '../lib/auth';
-import { badRequest, forbidden, isUniqueViolation, notFound } from '../lib/errors';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors';
 import { excerpt, oneOf, parsePrefecture, parseYear, requireString } from '../lib/validate';
 import { countReactionsFor, summarizeReactions } from '../lib/reactions';
 
@@ -85,7 +85,12 @@ stories.post('/', requireAuth, async (c) => {
     .insert({ user_id: c.get('userId'), title, body: text, prefecture, municipality, year, season })
     .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
     .single();
-  if (error) throw error;
+  if (error) {
+    if (isUniqueViolation(error)) {
+      throw conflict('この場所・季節にはすでにあなたの物語があります', 'STORY_SLOT_TAKEN');
+    }
+    throw error;
+  }
 
   return c.json(
     {
@@ -260,7 +265,12 @@ stories.put('/:id', requireAuth, async (c) => {
     .eq('id', id)
     .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
     .single();
-  if (uErr) throw uErr;
+  if (uErr) {
+    if (isUniqueViolation(uErr)) {
+      throw conflict('この場所・季節にはすでにあなたの物語があります', 'STORY_SLOT_TAKEN');
+    }
+    throw uErr;
+  }
 
   return c.json({
     id: updated.id,

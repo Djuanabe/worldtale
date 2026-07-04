@@ -369,61 +369,68 @@ textarea {
   accent-color: var(--c-gold);
 }
 
-/* ---- 日本地図（ドット調タイル） ---- */
+/* ---- 日本地図（実形状のドット絵マップ） ---- */
 
-.map-wrap {
-  overflow-x: auto;
+.jp-map-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   padding: 8px 0 20px;
 }
 
-.pref-map {
-  display: grid;
-  grid-template-columns: repeat(11, 42px);
-  grid-auto-rows: 42px;
-  gap: 3px;
+/* 低解像度canvas(136×150)を pixelated 拡大。アスペクト比を保ちつつ最大幅600px、
+   モバイルは幅100%（デフォルトのwidth:100%がそのまま効く） */
+.jp-map-frame {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 136 / 150;
   margin: 0 auto;
-  width: max-content;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
 }
 
-.pref-tile {
-  grid-column: var(--col);
-  grid-row: var(--row);
+.jp-map-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.jp-map-highlight {
+  cursor: pointer;
+}
+
+.jp-map-highlight:focus-visible {
+  outline: 2px solid var(--c-gold);
+  outline-offset: 2px;
+}
+
+/* 都道府県名+件数のメッセージウィンドウ。hover中でないときは空にして
+   placeholder文言を出す（レイアウト崩れ防止のため常に領域を確保） */
+.map-msg {
+  min-height: 1.6em;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  font-size: 0.66rem;
-  line-height: 1.2;
-  /* ベベル枠（左上明るく・右下暗く） */
-  border: 2px solid;
-  border-color: rgba(255, 255, 255, 0.55) rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.4)
-    rgba(255, 255, 255, 0.55);
-  border-radius: 0;
-  cursor: pointer;
-  padding: 2px;
-  position: relative;
+  background: var(--c-win);
+  color: var(--c-win-text);
+  border: 3px solid var(--c-win-text);
+  box-shadow: 0 0 0 3px var(--c-win), 0 0 0 5px var(--c-win-text);
+  padding: 10px 16px;
+  margin: 4px 6px 0;
+  font-size: 0.9rem;
+  width: 100%;
+  max-width: 600px;
 }
 
-.pref-tile:hover {
-  filter: brightness(1.12);
-  text-decoration: none;
-  z-index: 2;
-}
-
-.pref-tile:hover::before,
-.pref-tile:focus-visible::before {
-  content: "▶";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.55rem;
-  color: var(--c-gold);
-  text-shadow: 1px 1px 0 #000;
-}
-
-.pref-tile[data-okinawa="true"] {
-  margin-top: 16px;
+.map-msg:empty::before {
+  content: "都道府県にカーソルを合わせると、物語の数が分かります";
+  color: var(--c-dim-text);
 }
 
 .map-legend {
@@ -433,7 +440,7 @@ textarea {
   justify-content: center;
   font-size: 0.8rem;
   color: var(--c-dim-text);
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .legend-swatch {
@@ -451,6 +458,16 @@ textarea {
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+/* アクセシビリティ用: 都道府県プルダウン + 遷移ボタン */
+.map-select-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
 }
 
 /* ---- 物語一覧（検索・ユーザーページ） ---- */
@@ -1148,15 +1165,8 @@ textarea {
     padding: 16px 12px 48px;
   }
 
-  .pref-map {
-    grid-template-columns: repeat(11, 26px);
-    grid-auto-rows: 26px;
-    gap: 2px;
-  }
-
-  .pref-tile {
-    font-size: 0.48rem;
-    border-width: 1px;
+  .jp-map-frame {
+    max-width: 100%;
   }
 
   .header-inner {

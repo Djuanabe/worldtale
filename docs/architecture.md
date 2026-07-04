@@ -89,7 +89,7 @@ CORS は Pages のオリジンを許可（環境変数 `ALLOWED_ORIGIN`、未設
 |---|---|---|---|
 | GET | /api/stories | - | クエリ: `prefecture`, `year`, `userId`(publicId), `page`(1〜), `limit`(既定20, 最大50)。`{stories:[概要], total, page}`。概要 = `{id, title, excerpt(120字), prefecture, municipality, year, season, username, userPublicId, createdAt, likeCount, metCount}`。is_hidden は除外。新しい順。**season/municipality での絞り込みは行わない（表示専用）** |
 | GET | /api/stories/:id | - | 本文込みの全体（municipality, season 含む） + `likeCount, metCount` + 添付写真 `{id,url,season}`。**呼ばれるたび views をインクリメント** |
-| POST | /api/stories | ✔ | `{title, body, prefecture, municipality, year, season}` → 201。バリデーション: title 1..100, body 1..20000, prefecture 1..47, municipality 1..50, year 1900..今年, season は4値 |
+| POST | /api/stories | ✔ | `{title, body, prefecture, municipality, year, season}` → 201。バリデーション: title 1..100, body 1..20000, prefecture 1..47, municipality 1..50, year 1900..今年, season は4値。**1ユーザー×1都道府県×1季節に物語1つまで**(0003 の unique index)。違反は 409 `{error:{code:"STORY_SLOT_TAKEN"}}`。PUT で場所・季節を変える場合も同様 |
 | PUT | /api/stories/:id | ✔ 本人 | 同上の部分更新 |
 | DELETE | /api/stories/:id | ✔ 本人 | 添付写真もStorageごと削除 |
 | GET | /api/stories/:id/stats | ✔ 本人 | `{views, likeCount, metCount}` |
@@ -147,10 +147,19 @@ Vite + vanilla TypeScript の SPA。History API ルーティング + `public/_re
 | `/login`, `/register` | 認証。登録完了時にユーザーIDを大きく表示し「控えてください」と警告 |
 | `/me` | マイページ: 自分の物語一覧と閲覧数・リアクション数、写真管理 |
 
-### 日本地図
-外部アセットに依存しない**タイル型（グリッド配置）マップ**を自前実装する。
-47都道府県を CSS Grid 上に日本列島の形に配置（北海道は右上、沖縄は左下、の定番タイルレイアウト）。
-各タイルに都道府県名（漢字）を表示。データは `src/prefectures.ts` にコード・名前・grid座標を定義。
+### 日本地図（実形状のドット絵マップ）
+**実際の日本列島の形をしたピクセルマップ**を、道画面と同じドット絵調で描く。
+- データ: `src/japanMap.ts`（自動生成。`tools/generate-japan-map.py` が
+  dataofjapan/land の japan.geojson を 136×150 のセルグリッドにラスタライズしたもの。
+  各セルは海 `.` か都道府県コードの1文字。沖縄は左上のインセット枠）
+- 描画: 低解像度 canvas に 1セル=1ドットで描き `image-rendering: pixelated` で拡大。
+  海はディザ入りの青系バンド、陸は物語数に応じた草原系の濃淡、海岸線に暗色の輪郭、
+  沖縄インセットに区切り枠。道画面と同じ牧歌的パレット
+- 操作: canvas 上のポインタ位置 → セル → 都道府県コードを解決。hover で県名+件数の
+  小さなメッセージウィンドウとハイライト、クリックで `/p/:pref` へ。
+  アクセシビリティ用に都道府県セレクト（プルダウン）も併設
+- **将来**: マップズームイン → 市区町村選択に対応する（セルグリッドを都道府県単位で
+  高解像度に再生成する設計余地を残す。`PREF_CELL_CENTER` はそのアンカー）
 
 ### 6.1 都道府県ページ「道ゆく人」シーン
 
