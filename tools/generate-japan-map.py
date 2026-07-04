@@ -148,6 +148,52 @@ def main():
             if point_in_ring(lon, lat, BIWA_POLYGON):
                 grid[cy][cx] = "."
 
+    # --- 内陸の取りこぼし穴を埋める ---
+    # セル中心が県境の隙間に落ちて '.' になった1〜2セルの穴は、
+    # 海色+海岸線の輪郭で「謎のひし形」に見えてしまう。
+    # 外周からの flood fill で外海に到達できない水セルを検出し、
+    # 琵琶湖（意図的な水域）以外は周囲で最も多い県コードで埋める。
+    from collections import deque
+
+    reachable = [[False] * grid_w for _ in range(GRID_H)]
+    dq = deque()
+    for x in range(grid_w):
+        for y in (0, GRID_H - 1):
+            if grid[y][x] == "." and not reachable[y][x]:
+                reachable[y][x] = True
+                dq.append((x, y))
+    for y in range(GRID_H):
+        for x in (0, grid_w - 1):
+            if grid[y][x] == "." and not reachable[y][x]:
+                reachable[y][x] = True
+                dq.append((x, y))
+    while dq:
+        x, y = dq.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < grid_w and 0 <= ny < GRID_H and grid[ny][nx] == "." and not reachable[ny][nx]:
+                reachable[ny][nx] = True
+                dq.append((nx, ny))
+
+    filled_holes = 0
+    for cy in range(GRID_H):
+        for cx in range(grid_w):
+            if grid[cy][cx] != "." or reachable[cy][cx]:
+                continue
+            lon, lat = lonlat_of(cx, cy)
+            if point_in_ring(lon, lat, BIWA_POLYGON):
+                continue  # 琵琶湖は残す
+            neigh = {}
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < grid_w and 0 <= ny < GRID_H and grid[ny][nx] != ".":
+                        neigh[grid[ny][nx]] = neigh.get(grid[ny][nx], 0) + 1
+            if neigh:
+                grid[cy][cx] = max(neigh, key=neigh.get)
+                filled_holes += 1
+    print(f"filled inland holes: {filled_holes}", file=sys.stderr)
+
     # --- 沖縄: 同じ縮尺でラスタライズして下方中央のインセットへ ---
     oki_w = round((OKI_LON_MAX - OKI_LON_MIN) * kx / lon_span * grid_w)
     oki_h = round((OKI_LAT_MAX - OKI_LAT_MIN) / lat_span * GRID_H)
