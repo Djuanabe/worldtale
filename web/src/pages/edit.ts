@@ -28,7 +28,7 @@ export async function renderEditPage(
   try {
     const [storyRes, meRes] = await Promise.all([getStory(id), fetchMe()]);
     story = storyRes;
-    if (story.userPublicId !== meRes.user.publicId) {
+    if (story.userHandle !== meRes.user.handle) {
       // 本人以外は物語ページへ戻す
       navigate(`/story/${id}`, true);
       return;

@@ -78,7 +78,7 @@ export async function renderSearchPage(
           el("h3", {}, [el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])]),
           el("div", { class: "story-meta" }, [
             `${prefName(s.prefecture)} ・ ${s.year}年 ・ `,
-            el("a", { href: `/u/${s.userPublicId}`, "data-link": true }, [s.username])
+            el("a", { href: `/u/${s.userHandle}`, "data-link": true }, [s.username])
           ]),
           el("p", { class: "story-excerpt" }, [s.excerpt])
         ])

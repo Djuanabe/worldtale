@@ -16,7 +16,7 @@ addRoute("/", renderHome);
 addRoute("/p/:pref", renderPrefPage);
 addRoute("/story/:id", renderStoryPage);
 addRoute("/story/:id/edit", renderEditPage);
-addRoute("/u/:publicId", renderUserPage);
+addRoute("/u/:handle", renderUserPage);
 addRoute("/search", renderSearchPage);
 addRoute("/write", renderWritePage);
 addRoute("/login", renderLoginPage);

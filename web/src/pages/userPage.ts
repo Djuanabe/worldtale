@@ -7,20 +7,20 @@ export async function renderUserPage(
   _query: URLSearchParams,
   container: HTMLElement
 ): Promise<void> {
-  const publicId = params.publicId;
+  const handle = params.handle;
   container.append(loadingNode("読み込み中…"));
 
   try {
     const [user, storyResult] = await Promise.all([
-      getUser(publicId),
-      listStories({ userId: publicId, page: 1, limit: 50 })
+      getUser(handle),
+      listStories({ userId: handle, page: 1, limit: 50 })
     ]);
 
     container.innerHTML = "";
     container.append(
       el("div", { class: "card" }, [
         el("h1", { class: "page-title", style: "border-bottom:none" }, [user.username]),
-        el("p", { class: "hint" }, [`ID: ${user.publicId} ・ 物語 ${user.storyCount}件`])
+        el("p", { class: "hint" }, [`ID: ${user.handle} ・ 物語 ${user.storyCount}件`])
       ])
     );
 

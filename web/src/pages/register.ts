@@ -90,7 +90,7 @@ function showIdReveal(container: HTMLElement, publicId: string, username: string
       ]),
       el("div", { class: "id-value" }, [publicId]),
       el("p", { class: "hint" }, [
-        "メモやスクリーンショットなどで安全な場所に保管してください。パスワードとあわせて忘れると、二度とこのアカウントにログインできなくなります。"
+        "これはログイン用のIDで、他の人には見えません。メモやスクリーンショットなどで安全な場所に保管してください。パスワードとあわせて忘れると、二度とこのアカウントにログインできなくなります。"
       ]),
       el("div", { class: "checkbox-row" }, [
         confirmCheckbox,

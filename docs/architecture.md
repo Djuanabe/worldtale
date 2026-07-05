@@ -42,8 +42,11 @@ worldtale/
 
 `supabase/migrations/0001_init.sql` 参照。要点:
 
-- **users**: `id uuid PK` / `public_id text UNIQUE`（ランダム10文字、ログインID） /
+- **users**: `id uuid PK` / `public_id text UNIQUE`（ランダム10文字、ログインID。**非公開**） /
+  `handle text UNIQUE`（ランダム10文字、公開用ハンドル。0004 で追加） /
   `username text`（表示名） / `password_hash text` / `created_at`
+  - **public_id は認証情報**なので、本人向けレスポンス（/auth/*）以外では絶対に返さない。
+    公開されるのは handle のみ（/u/:handle、物語の userHandle）
 - **stories**: `id uuid PK` / `user_id FK` / `prefecture int (1..47, JIS X 0401)` /
   `municipality text (1..50)` / `year int` / `season text ('spring'|'summer'|'autumn'|'winter')` /
   `title text` / `body text` / `views bigint default 0` /
@@ -80,14 +83,14 @@ CORS は Pages のオリジンを許可（環境変数 `ALLOWED_ORIGIN`、未設
 ### 認証
 | Method | Path | Auth | 説明 |
 |---|---|---|---|
-| POST | /api/auth/register | - | `{username, password}` → `201 {user:{publicId,username}, token}` |
+| POST | /api/auth/register | - | `{username, password}` → `201 {user:{publicId, username, handle}, token}`（publicId はここでのみ表示） |
 | POST | /api/auth/login | - | `{publicId, password}` → `{user, token}` |
-| GET | /api/auth/me | ✔ | `{user:{publicId, username}}` |
+| GET | /api/auth/me | ✔ | `{user:{publicId, username, handle}}`（本人のみ） |
 
 ### 物語
 | Method | Path | Auth | 説明 |
 |---|---|---|---|
-| GET | /api/stories | - | クエリ: `prefecture`, `year`, `userId`(publicId), `page`(1〜), `limit`(既定20, 最大50)。`{stories:[概要], total, page}`。概要 = `{id, title, excerpt(120字), prefecture, municipality, year, season, username, userPublicId, createdAt, likeCount, metCount}`。is_hidden は除外。新しい順。**season/municipality での絞り込みは行わない（表示専用）** |
+| GET | /api/stories | - | クエリ: `prefecture`, `year`, `userId`(handle), `page`(1〜), `limit`(既定20, 最大50)。`{stories:[概要], total, page}`。概要 = `{id, title, excerpt(120字), prefecture, municipality, year, season, username, userHandle, createdAt, likeCount, metCount}`。is_hidden は除外。新しい順。**season/municipality での絞り込みは行わない（表示専用）** |
 | GET | /api/stories/:id | - | 本文込みの全体（municipality, season 含む） + `likeCount, metCount` + 添付写真 `{id,url,season}`。**呼ばれるたび views をインクリメント** |
 | POST | /api/stories | ✔ | `{title, body, prefecture, municipality, year, season}` → 201。バリデーション: title 1..100, body 1..20000, prefecture 1..47, municipality 1..50, year 1900..今年, season は4値。**1ユーザー×1都道府県×1季節に物語1つまで**(0003 の unique index)。違反は 409 `{error:{code:"STORY_SLOT_TAKEN"}}`。PUT で場所・季節を変える場合も同様 |
 | PUT | /api/stories/:id | ✔ 本人 | 同上の部分更新 |
@@ -106,7 +109,7 @@ anonToken はフロントが `crypto.randomUUID()` で生成し localStorage に
 ### ユーザー
 | Method | Path | Auth | 説明 |
 |---|---|---|---|
-| GET | /api/users/:publicId | - | `{publicId, username, storyCount}`（物語は GET /api/stories?userId= で取得） |
+| GET | /api/users/:handle | - | `{handle, username, storyCount}`（物語は GET /api/stories?userId=handle で取得。public_id は返さない） |
 
 ### 写真
 | Method | Path | Auth | 説明 |
@@ -141,7 +144,7 @@ Vite + vanilla TypeScript の SPA。History API ルーティング + `public/_re
 | `/` | トップ: コンセプト文 + 日本地図（タイル型、47都道府県）。年セレクタ。物語数で濃淡 |
 | `/p/:pref` | 都道府県ページ: **「道ゆく人」シーン**（下記 6.1）。`?year=` で絞り込み |
 | `/story/:id` | 物語ページ: 本文、メタ情報（**都道府県 市区町村 ・ 年 ・ 季節**）、いいね/出会ってたかもボタン、共有ボタン、報告ボタン。読書モードでもタイトルとともに同じメタ情報を表示する |
-| `/u/:publicId` | ユーザーページ: その人の物語を年順に辿るタイムライン |
+| `/u/:handle` | ユーザーページ: その人の物語を年順に辿るタイムライン |
 | `/search` | 検索: 都道府県 × 年で探す |
 | `/write` | 投稿フォーム（要ログイン）: タイトル・本文・都道府県・**市区町村**・年・**季節**（すべて必須）+ **風景写真の添付欄（任意、フォーム内に表示）** + 注意事項の同意チェック必須。市区町村欄には「番地・建物名は書かない」の注意書き。写真は物語の都道府県・季節に紐づけてアップロードする |
 | `/login`, `/register` | 認証。登録完了時にユーザーIDを大きく表示し「控えてください」と警告 |

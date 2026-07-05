@@ -5,6 +5,7 @@ import { API_BASE } from "./config";
 export interface User {
   publicId: string;
   username: string;
+  handle: string;
 }
 
 export interface StorySummary {
@@ -16,7 +17,7 @@ export interface StorySummary {
   year: number;
   season: string | null;
   username: string;
-  userPublicId: string;
+  userHandle: string;
   createdAt: string;
   likeCount: number;
   metCount: number;
@@ -37,7 +38,7 @@ export interface StoryDetail {
   year: number;
   season: string | null;
   username: string;
-  userPublicId: string;
+  userHandle: string;
   createdAt: string;
   updatedAt?: string;
   likeCount: number;
@@ -263,8 +264,8 @@ export function getReactions(id: string): Promise<ReactionResult> {
 
 // ---- ユーザー ----
 
-export function getUser(publicId: string): Promise<{ publicId: string; username: string; storyCount: number }> {
-  return request(`/api/users/${encodeURIComponent(publicId)}`);
+export function getUser(handle: string): Promise<{ handle: string; username: string; storyCount: number }> {
+  return request(`/api/users/${encodeURIComponent(handle)}`);
 }
 
 // ---- 写真 ----

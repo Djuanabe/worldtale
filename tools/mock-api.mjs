@@ -7,9 +7,9 @@ const PORT = 8787;
 
 // ---- シードデータ ----
 const users = [
-  { id: "u1", publicId: "DEMO123456", username: "はなこ", password: "password123" },
-  { id: "u2", publicId: "KAZE789012", username: "かぜのたび", password: "password123" },
-  { id: "u3", publicId: "YUKI345678", username: "ゆきぐに", password: "password123" },
+  { id: "u1", publicId: "DEMO123456", handle: "H4NAK02340", username: "はなこ", password: "password123" },
+  { id: "u2", publicId: "KAZE789012", handle: "K4ZE571230", username: "かぜのたび", password: "password123" },
+  { id: "u3", publicId: "YUKI345678", handle: "YUK1893450", username: "ゆきぐに", password: "password123" },
 ];
 
 let storySeq = 0;
@@ -114,7 +114,7 @@ function summary(s) {
     excerpt: s.body.replace(/\n/g, " ").slice(0, 120),
     prefecture: s.prefecture, municipality: s.municipality ?? null,
     year: s.year, season: s.season ?? null,
-    username: u.username, userPublicId: u.publicId,
+    username: u.username, userHandle: u.handle,
     createdAt: s.createdAt, likeCount: c.likeCount, metCount: c.metCount,
   };
 }
@@ -204,11 +204,12 @@ const server = http.createServer(async (req, res) => {
       if (!b.username || !b.password || String(b.password).length < 8)
         return err(res, 400, "VALIDATION", "ユーザー名と8文字以上のパスワードが必要です");
       const publicId = crypto.randomBytes(8).toString("hex").toUpperCase().replace(/[ILOU]/g, "X").slice(0, 10);
-      const user = { id: `u${users.length + 1}`, publicId, username: String(b.username), password: String(b.password) };
+      const handle = crypto.randomBytes(8).toString("hex").toUpperCase().replace(/[ILOU]/g, "X").slice(0, 10);
+      const user = { id: `u${users.length + 1}`, publicId, handle, username: String(b.username), password: String(b.password) };
       users.push(user);
       const token = crypto.randomUUID();
       tokens.set(token, user.id);
-      return json(res, 201, { user: { publicId: user.publicId, username: user.username }, token });
+      return json(res, 201, { user: { publicId: user.publicId, username: user.username, handle: user.handle }, token });
     }
     if (path === "/api/auth/login" && req.method === "POST") {
       const b = JSON.parse((await readBody(req)).toString() || "{}");
@@ -216,12 +217,12 @@ const server = http.createServer(async (req, res) => {
       if (!user) return err(res, 401, "UNAUTHORIZED", "ユーザーIDまたはパスワードが違います");
       const token = crypto.randomUUID();
       tokens.set(token, user.id);
-      return json(res, 200, { user: { publicId: user.publicId, username: user.username }, token });
+      return json(res, 200, { user: { publicId: user.publicId, username: user.username, handle: user.handle }, token });
     }
     if (path === "/api/auth/me") {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
-      return json(res, 200, { user: { publicId: u.publicId, username: u.username } });
+      return json(res, 200, { user: { publicId: u.publicId, username: u.username, handle: u.handle } });
     }
 
     // ---- my ----
@@ -296,10 +297,10 @@ const server = http.createServer(async (req, res) => {
     // ---- users ----
     const userMatch = path.match(/^\/api\/users\/([\w]+)$/);
     if (userMatch) {
-      const u = users.find((x) => x.publicId === userMatch[1]);
+      const u = users.find((x) => x.handle === userMatch[1]);
       if (!u) return err(res, 404, "NOT_FOUND", "ユーザーが見つかりません");
       return json(res, 200, {
-        publicId: u.publicId, username: u.username,
+        handle: u.handle, username: u.username,
         storyCount: stories.filter((s) => s.userId === u.id).length,
       });
     }
@@ -319,7 +320,7 @@ const server = http.createServer(async (req, res) => {
       if (q.get("prefecture")) list = list.filter((s) => s.prefecture === Number(q.get("prefecture")));
       if (q.get("year")) list = list.filter((s) => s.year === Number(q.get("year")));
       if (q.get("userId")) {
-        const u = users.find((x) => x.publicId === q.get("userId"));
+        const u = users.find((x) => x.handle === q.get("userId"));
         list = u ? list.filter((s) => s.userId === u.id) : [];
       }
       list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -380,7 +381,7 @@ const server = http.createServer(async (req, res) => {
           id: s.id, title: s.title, body: s.body,
           prefecture: s.prefecture, municipality: s.municipality ?? null,
           year: s.year, season: s.season ?? null,
-          username: u.username, userPublicId: u.publicId,
+          username: u.username, userHandle: u.handle,
           createdAt: s.createdAt, updatedAt: s.updatedAt,
           ...counts(s.id),
           photos: photos.filter((p) => p.storyId === s.id).map((p) => ({ id: p.id, url: photoUrl(p, origin), season: p.season })),

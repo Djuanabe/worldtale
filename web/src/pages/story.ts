@@ -164,7 +164,7 @@ export async function renderStoryPage(
     el("h1", { class: "page-title", style: "border-bottom:none" }, [story.title]),
     el("p", { class: "story-meta" }, [
       `${storyMetaText(story)} ・ `,
-      el("a", { href: `/u/${story.userPublicId}`, "data-link": true }, [story.username])
+      el("a", { href: `/u/${story.userHandle}`, "data-link": true }, [story.username])
     ])
   ]);
   container.append(header);
@@ -225,7 +225,7 @@ export async function renderStoryPage(
   if (isLoggedIn()) {
     try {
       const me = await fetchMe();
-      if (me.user.publicId === story.userPublicId) {
+      if (me.user.handle === story.userHandle) {
         const editLink = el(
           "a",
           { class: "btn btn-outline", href: `/story/${story.id}/edit`, "data-link": true },

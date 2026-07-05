@@ -21,7 +21,7 @@ stories.get('/', async (c) => {
 
   let query = sb
     .from('stories')
-    .select('id, title, body, prefecture, municipality, year, season, created_at, user:users!inner(username, public_id)', {
+    .select('id, title, body, prefecture, municipality, year, season, created_at, user:users!inner(username, handle)', {
       count: 'exact',
     })
     .eq('is_hidden', false);
@@ -29,10 +29,11 @@ stories.get('/', async (c) => {
   if (q.prefecture !== undefined) query = query.eq('prefecture', parsePrefecture(q.prefecture));
   if (q.year !== undefined) query = query.eq('year', parseYear(q.year));
   if (q.userId) {
+    // userId パラメータは handle として解釈する
     const { data: u, error: uErr } = await sb
       .from('users')
       .select('id')
-      .eq('public_id', q.userId)
+      .eq('handle', q.userId)
       .maybeSingle();
     if (uErr) throw uErr;
     if (!u) return c.json({ stories: [], total: 0, page });
@@ -58,7 +59,7 @@ stories.get('/', async (c) => {
       year: r.year,
       season: r.season ?? null,
       username: r.user?.username ?? '',
-      userPublicId: r.user?.public_id ?? '',
+      userHandle: r.user?.handle ?? '',
       createdAt: r.created_at,
       likeCount: rc.likeCount,
       metCount: rc.metCount,
@@ -191,7 +192,7 @@ stories.get('/:id', async (c) => {
 
   const { data: story, error } = await sb
     .from('stories')
-    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at, is_hidden, user:users!inner(username, public_id)')
+    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at, is_hidden, user:users!inner(username, handle)')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -221,7 +222,7 @@ stories.get('/:id', async (c) => {
     year: s.year,
     season: s.season ?? null,
     username: s.user?.username ?? '',
-    userPublicId: s.user?.public_id ?? '',
+    userHandle: s.user?.handle ?? '',
     createdAt: s.created_at,
     updatedAt: s.updated_at,
     likeCount,

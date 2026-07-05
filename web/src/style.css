@@ -1139,8 +1139,105 @@ textarea {
   image-rendering: pixelated;
 }
 
+.reader-bottom-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 .reader-advance {
   min-height: 44px;
+}
+
+/* 写真のサムネイルウィンドウ（つづきボタンの左） */
+.reader-photo-thumb {
+  flex-shrink: 0;
+  display: block;
+  width: 140px;
+  padding: 4px;
+  background: var(--c-win);
+  border: 3px solid var(--c-win-text);
+  box-shadow: 0 0 0 3px var(--c-win), 0 0 0 5px var(--c-win-text);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.reader-photo-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: auto;
+}
+
+.reader-photo-thumb:hover {
+  border-color: var(--c-gold);
+}
+
+.reader-photo-thumb:focus-visible {
+  outline: 2px solid var(--c-gold);
+  outline-offset: 3px;
+}
+
+.reader-photo-thumb:active {
+  transform: translateY(1px);
+}
+
+/* 写真ライトボックス（サムネイルクリックで拡大表示） */
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 10, 0.78);
+  padding: 24px;
+  animation: readerFade 0.25s ease;
+}
+
+.photo-lightbox-frame {
+  position: relative;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: var(--c-win);
+  border: 3px solid var(--c-win-text);
+  box-shadow: 0 0 0 3px var(--c-win), 0 0 0 5px var(--c-win-text);
+  padding: 8px;
+}
+
+.photo-lightbox-frame img {
+  display: block;
+  max-width: calc(90vw - 16px);
+  max-height: calc(80vh - 16px);
+  /* 小さい写真も鑑賞サイズまで拡大する（縦横比は保持） */
+  min-width: min(60vw, 520px);
+  height: auto;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--c-win-text);
+  box-shadow: 0 0 0 2px var(--c-win);
+  border-radius: 0;
+  background: var(--c-win);
+  color: var(--c-win-text);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.photo-lightbox-close:hover {
+  border-color: var(--c-gold);
+  color: var(--c-gold);
+}
+
+.photo-lightbox-close:active {
+  transform: translateY(1px);
 }
 
 .reader-actions {
@@ -1169,7 +1266,8 @@ textarea {
   }
 
   .reader-overlay,
-  .reader-actions {
+  .reader-actions,
+  .photo-lightbox {
     animation: none;
   }
 
@@ -1233,6 +1331,15 @@ textarea {
   .reader-avatar {
     height: 110px !important;
     width: 73px !important;
+  }
+
+  .reader-bottom-right {
+    gap: 6px;
+  }
+
+  .reader-photo-thumb {
+    width: 78px;
+    padding: 3px;
   }
 
   .stat-table {

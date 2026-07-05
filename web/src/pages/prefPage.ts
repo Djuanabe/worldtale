@@ -553,6 +553,7 @@ export async function renderPrefPage(
   const timers = new Set<number>();
   let rafId = 0;
   let readerEl: HTMLElement | null = null;
+  let readerLightboxEl: HTMLElement | null = null;
 
   function later(fn: () => void, ms: number): number {
     const id = window.setTimeout(() => {
@@ -693,7 +694,7 @@ export async function renderPrefPage(
   const activeUsers = new Set<string>();
 
   function availableStories(): StorySummary[] {
-    return storyPool.filter((s) => !activeUsers.has(s.userPublicId));
+    return storyPool.filter((s) => !activeUsers.has(s.userHandle));
   }
 
   function spawnWalker(): void {
@@ -701,7 +702,7 @@ export async function renderPrefPage(
     const candidates = availableStories();
     if (candidates.length === 0) return; // 空きユーザーがいなければ増やさない
     const story = pick(candidates);
-    activeUsers.add(story.userPublicId);
+    activeUsers.add(story.userHandle);
     const scheme = pick(AVATAR_SCHEMES);
     const t = rand(0.15, 0.95);
     const yFrac = groundY(t);
@@ -789,7 +790,7 @@ export async function renderPrefPage(
   function despawnWalker(walker: Walker): void {
     if (walker.dead) return;
     walker.dead = true;
-    activeUsers.delete(walker.story.userPublicId);
+    activeUsers.delete(walker.story.userHandle);
     walker.btn.remove();
     walkers = walkers.filter((w) => w !== walker);
     later(() => spawnWalker(), rand(400, 1800));
@@ -799,7 +800,7 @@ export async function renderPrefPage(
   function retireWalkerFade(walker: Walker): void {
     if (walker.dead) return;
     walker.dead = true;
-    activeUsers.delete(walker.story.userPublicId);
+    activeUsers.delete(walker.story.userHandle);
     walker.btn.classList.remove("alive");
     later(() => {
       walker.btn.remove();
@@ -842,7 +843,7 @@ export async function renderPrefPage(
 
   function spawnInitialWalkers(): void {
     if (storyPool.length === 0) return;
-    const uniqueUsers = new Set(storyPool.map((s) => s.userPublicId)).size;
+    const uniqueUsers = new Set(storyPool.map((s) => s.userHandle)).size;
     const n = Math.min(8, uniqueUsers);
     for (let i = 0; i < n; i++) {
       later(() => spawnWalker(), i * rand(150, 700));
@@ -979,14 +980,43 @@ export async function renderPrefPage(
     const bottomRow = el("div", { class: "reader-bottom" });
     const avatarSvg = buildPersonSvg(scheme, 170, "front"); // 大アバターは正面で静止
     avatarSvg.classList.add("reader-avatar");
+    const bottomRight = el("div", { class: "reader-bottom-right" });
     const nextBtn = el("button", { class: "btn reader-advance" }, ["つづき"]) as HTMLButtonElement;
-    bottomRow.append(avatarSvg, nextBtn);
+    bottomRight.append(nextBtn);
+    bottomRow.append(avatarSvg, bottomRight);
     stage.append(stream, bottomRow);
 
     overlay.append(bg, dim, paper, closeBtn, stage);
     document.body.append(overlay);
 
+    // ---- 写真ライトボックス（サムネイルクリックで拡大表示） ----
+    function openLightbox(url: string, alt: string): void {
+      if (readerLightboxEl) return;
+      const box = el("div", { class: "photo-lightbox", "data-noadvance": "true" });
+      const frame = el("div", { class: "photo-lightbox-frame" });
+      const img = el("img", { src: url, alt });
+      const lbCloseBtn = el(
+        "button",
+        { class: "photo-lightbox-close", "aria-label": "閉じる", onclick: () => closeLightbox() },
+        ["✕"]
+      );
+      frame.append(img, lbCloseBtn);
+      box.append(frame);
+      // 暗幕（frame の外側）クリックで閉じる
+      box.addEventListener("click", (e) => {
+        if (e.target === box) closeLightbox();
+      });
+      overlay.append(box);
+      readerLightboxEl = box;
+    }
+
+    function closeLightbox(): void {
+      readerLightboxEl?.remove();
+      readerLightboxEl = null;
+    }
+
     function closeReader(): void {
+      closeLightbox();
       if (openedByPush) {
         history.back(); // popstate → ルーターが道のシーンを再描画（cleanup 済み）
       } else {
@@ -1000,6 +1030,11 @@ export async function renderPrefPage(
         if (e.key !== "Escape" || !readerEl) return;
         // 報告モーダルが開いているときは、そちらの Esc（モーダルを閉じる）に譲る
         if (document.querySelector(".modal-overlay")) return;
+        // ライトボックスが開いているときは、まずそちらを閉じる
+        if (readerLightboxEl) {
+          closeLightbox();
+          return;
+        }
         closeReader();
       },
       { signal: ac.signal }
@@ -1026,8 +1061,22 @@ export async function renderPrefPage(
       story = loaded;
 
       if (story.photos.length > 0) {
-        bg.style.backgroundImage = `url("${story.photos[0].url}")`;
+        const photoUrl = story.photos[0].url;
+        bg.style.backgroundImage = `url("${photoUrl}")`;
         overlay.classList.add("has-photo");
+
+        // つづきボタンの左に写真のサムネイルウィンドウを表示。クリックでライトボックス拡大
+        const thumbBtn = el(
+          "button",
+          {
+            class: "reader-photo-thumb",
+            "aria-label": "写真を拡大",
+            "data-noadvance": "true",
+            onclick: () => openLightbox(photoUrl, `${story!.title} の風景写真`)
+          },
+          [el("img", { src: photoUrl, alt: "" })]
+        );
+        bottomRight.insertBefore(thumbBtn, nextBtn);
       }
       chunks = chunkBody(story.body);
       loadingBubble.remove();
@@ -1188,6 +1237,10 @@ export async function renderPrefPage(
     if (rafId) cancelAnimationFrame(rafId);
     clearAllTimers();
     ac.abort();
+    if (readerLightboxEl) {
+      readerLightboxEl.remove();
+      readerLightboxEl = null;
+    }
     if (readerEl) {
       readerEl.remove();
       readerEl = null;
