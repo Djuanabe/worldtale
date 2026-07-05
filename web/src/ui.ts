@@ -54,7 +54,7 @@ export function renderHeader(): void {
   ]);
 
   const nav = el("nav", { class: "nav" });
-  nav.append(link("/", "地図"), link("/search", "さがす"));
+  nav.append(link("/", "地図"), link("/search", "さがす"), link("/capsule", "カプセル"));
 
   if (isLoggedIn()) {
     nav.append(link("/write", "書く"), link("/me", "マイページ"));

@@ -1065,18 +1065,18 @@ export async function renderPrefPage(
         bg.style.backgroundImage = `url("${photoUrl}")`;
         overlay.classList.add("has-photo");
 
-        // つづきボタンの左に写真のサムネイルウィンドウを表示。クリックでライトボックス拡大
-        const thumbBtn = el(
+        // つづきボタンの左に「写真」ボタンを表示。クリックでライトボックス拡大
+        const photoBtn = el(
           "button",
           {
-            class: "reader-photo-thumb",
+            class: "btn reader-photo-btn",
             "aria-label": "写真を拡大",
             "data-noadvance": "true",
             onclick: () => openLightbox(photoUrl, `${story!.title} の風景写真`)
           },
-          [el("img", { src: photoUrl, alt: "" })]
-        );
-        bottomRight.insertBefore(thumbBtn, nextBtn);
+          ["写真"]
+        ) as HTMLButtonElement;
+        bottomRight.insertBefore(photoBtn, nextBtn);
       }
       chunks = chunkBody(story.body);
       loadingBubble.remove();

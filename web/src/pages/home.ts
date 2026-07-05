@@ -11,6 +11,7 @@ import { PREF_BY_CODE, PREFECTURES } from "../prefectures";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
 import { el, errorNode, loadingNode, yearOptions } from "../ui";
+import { buildCapsuleSvg } from "./capsule";
 
 const GRID: MapGridData = {
   rows: JAPAN_MAP_ROWS,
@@ -69,6 +70,29 @@ export async function renderHome(
     "aria-label": "日本地図。都道府県ごとの物語数を色の濃淡で表す"
   }) as HTMLCanvasElement;
   mapFrame.append(baseCanvas, hiCanvas);
+
+  // ---- タイムカプセルの入口: 地図右下の空いた海域にドット絵カプセルを重ねる ----
+  const capsuleEntryWrap = el("div", { class: "capsule-entry-wrap" });
+  const capsuleEntryBtn = el(
+    "button",
+    {
+      class: "capsule-entry",
+      type: "button",
+      "aria-label": "タイムカプセル",
+      title: "タイムカプセル",
+      onclick: (e: Event) => {
+        e.stopPropagation();
+        navigate("/capsule");
+      }
+    },
+    [buildCapsuleSvg(40)]
+  ) as HTMLButtonElement;
+  const capsuleEntryLabel = el("span", { class: "capsule-entry-label", "aria-hidden": "true" }, [
+    "タイムカプセル"
+  ]);
+  capsuleEntryWrap.append(capsuleEntryBtn, capsuleEntryLabel);
+  mapFrame.append(capsuleEntryWrap);
+
   mapHost.append(mapFrame);
 
   const msgBox = el("div", { class: "map-msg", "aria-live": "polite" });
