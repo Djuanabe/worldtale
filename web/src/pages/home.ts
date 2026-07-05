@@ -54,6 +54,13 @@ for (const [id, cells] of REGION_CELLS) {
   }
   REGION_BBOX.set(id, { x0, y0, x1: x1 + 1, y1: y1 + 1 });
 }
+// 沖縄はインセット枠全体をズーム範囲にする（枠内の海も含めて拡大表示）
+REGION_BBOX.set("okinawa", {
+  x0: OKINAWA_INSET.x,
+  y0: OKINAWA_INSET.y,
+  x1: OKINAWA_INSET.x + OKINAWA_INSET.w,
+  y1: OKINAWA_INSET.y + OKINAWA_INSET.h
+});
 
 // 地方のバウンディングボックスから、全国図(136×150)を基準にした
 // CSS transform(scale + translate) を求める。フレーム内に余白 pad を残して収める。
@@ -253,6 +260,25 @@ export async function renderHome(
     return i >= 0 ? i + 1 : null;
   }
 
+  // セルが沖縄インセットの枠内かどうか（枠内の海を含めて沖縄地方として扱う）
+  function inOkinawaInset(cell: [number, number] | null): boolean {
+    if (!cell) return false;
+    const [x, y] = cell;
+    return (
+      x >= OKINAWA_INSET.x &&
+      x < OKINAWA_INSET.x + OKINAWA_INSET.w &&
+      y >= OKINAWA_INSET.y &&
+      y < OKINAWA_INSET.y + OKINAWA_INSET.h
+    );
+  }
+
+  // 全国図で、セルからその地方を解決する（沖縄はインセット枠全体を対象にする）
+  function regionAtCell(cell: [number, number] | null): Region | undefined {
+    if (inOkinawaInset(cell)) return REGIONS.find((r) => r.id === "okinawa");
+    const code = codeFromCell(cell);
+    return code != null ? REGION_BY_PREF[code] : undefined;
+  }
+
   function enterRegion(region: Region): void {
     zoomedRegion = region;
     hoverKey = null;
@@ -284,24 +310,27 @@ export async function renderHome(
 
   const onPointerMove = (e: PointerEvent) => {
     if (!supportsHover) return;
-    const code = codeFromCell(cellFromEvent(e));
+    const cell = cellFromEvent(e);
     if (zoomedRegion) {
-      // ズーム中: その地方に属する都道府県のみ反応
-      setHover(code != null && zoomedRegion.codes.includes(code) ? code : null);
+      // ズーム中: その地方に属する都道府県のみ反応（沖縄はインセット枠内も可）
+      const code = codeFromCell(cell);
+      if (zoomedRegion.id === "okinawa" && inOkinawaInset(cell)) setHover(47);
+      else setHover(code != null && zoomedRegion.codes.includes(code) ? code : null);
     } else {
-      // 全国図: 都道府県→地方に変換して地方でハイライト
-      const region = code != null ? REGION_BY_PREF[code] : undefined;
+      // 全国図: セル→地方でハイライト（沖縄はインセット枠全体）
+      const region = regionAtCell(cell);
       setHover(region ? region.id : null);
     }
   };
   const onPointerLeave = () => setHover(null);
   const onClick = (e: MouseEvent) => {
-    const code = codeFromCell(cellFromEvent(e));
-    if (code == null) return;
+    const cell = cellFromEvent(e);
     if (zoomedRegion) {
-      if (zoomedRegion.codes.includes(code)) goToPref(code);
+      const code = codeFromCell(cell);
+      if (code != null && zoomedRegion.codes.includes(code)) goToPref(code);
+      else if (zoomedRegion.id === "okinawa" && inOkinawaInset(cell)) goToPref(47);
     } else {
-      const region = REGION_BY_PREF[code];
+      const region = regionAtCell(cell);
       if (region) enterRegion(region);
     }
   };

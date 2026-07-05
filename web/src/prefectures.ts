@@ -107,7 +107,8 @@ export const REGIONS: Region[] = [
   { id: "kinki", name: "近畿", codes: [24, 25, 26, 27, 28, 29, 30] },
   { id: "chugoku", name: "中国", codes: [31, 32, 33, 34, 35] },
   { id: "shikoku", name: "四国", codes: [36, 37, 38, 39] },
-  { id: "kyushu", name: "九州・沖縄", codes: [40, 41, 42, 43, 44, 45, 46, 47] }
+  { id: "kyushu", name: "九州", codes: [40, 41, 42, 43, 44, 45, 46] },
+  { id: "okinawa", name: "沖縄", codes: [47] }
 ];
 
 export const REGION_BY_PREF: Record<number, Region> = {};
