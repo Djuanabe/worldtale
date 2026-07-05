@@ -203,6 +203,9 @@ export async function renderCapsulePage(
       return;
     }
 
+    // 一度開けたら「あける」は消し、引き直しは結果カードの「もういちど回す」に任せる
+    openBtn.style.display = "none";
+
     const isSame = result.kind === "same";
     capsuleMsg.textContent = isSame
       ? `あなたが ${prefName(result.prefecture)} の${seasonLabel(result.season)}を過ごした頃、同じ場所にいた誰かの物語`
@@ -219,7 +222,12 @@ export async function renderCapsulePage(
         ]),
         el("p", { class: "story-excerpt" }, [s.excerpt]),
         el("div", { class: "capsule-result-actions" }, [
-          el("a", { href: `/story/${s.id}`, "data-link": true, class: "btn" }, ["この物語を読む"]),
+          // 道画面の読書モード(ふきだし)で開く: /p/:pref?story= は直接読書モードになる
+          el(
+            "a",
+            { href: `/p/${s.prefecture}?story=${s.id}`, "data-link": true, class: "btn" },
+            ["この物語を読む"]
+          ),
           el("button", { class: "btn btn-outline", onclick: () => void runDraw() }, [
             "もういちど回す"
           ])

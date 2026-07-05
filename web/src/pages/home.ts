@@ -7,7 +7,7 @@ import {
   OKINAWA_INSET
 } from "../japanMap";
 import { buildPrefCellIndex, drawJapanMapBase, drawPrefHighlight, MapGridData } from "../mapRender";
-import { PREF_BY_CODE, PREFECTURES } from "../prefectures";
+import { PREF_BY_CODE, PREFECTURES, REGIONS, REGION_BY_PREF, Region } from "../prefectures";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
 import { el, errorNode, loadingNode, yearOptions } from "../ui";
@@ -22,6 +22,55 @@ const GRID: MapGridData = {
 
 // 都道府県コード→そのセル一覧。地図データは不変なのでモジュール読み込み時に一度だけ作る。
 const PREF_CELLS = buildPrefCellIndex(GRID);
+
+// 地方id→所属県の全セル（全国図での地方ハイライト用）
+const REGION_CELLS = new Map<string, Array<[number, number]>>();
+for (const p of PREFECTURES) {
+  const region = REGION_BY_PREF[p.code];
+  if (!region) continue;
+  const arr = REGION_CELLS.get(region.id) ?? [];
+  arr.push(...(PREF_CELLS.get(p.code) ?? []));
+  REGION_CELLS.set(region.id, arr);
+}
+
+// 地方id→バウンディングボックス（セル座標）。ズーム変換の計算に使う。
+interface BBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+const REGION_BBOX = new Map<string, BBox>();
+for (const [id, cells] of REGION_CELLS) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const [x, y] of cells) {
+    if (x < x0) x0 = x;
+    if (y < y0) y0 = y;
+    if (x > x1) x1 = x;
+    if (y > y1) y1 = y;
+  }
+  REGION_BBOX.set(id, { x0, y0, x1: x1 + 1, y1: y1 + 1 });
+}
+
+// 地方のバウンディングボックスから、全国図(136×150)を基準にした
+// CSS transform(scale + translate) を求める。フレーム内に余白 pad を残して収める。
+function regionTransform(bbox: BBox): { scale: number; tx: number; ty: number } {
+  const pad = 0.08;
+  const fx0 = bbox.x0 / JAPAN_MAP_W;
+  const fy0 = bbox.y0 / JAPAN_MAP_H;
+  const fx1 = bbox.x1 / JAPAN_MAP_W;
+  const fy1 = bbox.y1 / JAPAN_MAP_H;
+  const bw = fx1 - fx0;
+  const bh = fy1 - fy0;
+  const scale = Math.min((1 - 2 * pad) / bw, (1 - 2 * pad) / bh);
+  const cx = (fx0 + fx1) / 2;
+  const cy = (fy0 + fy1) / 2;
+  // 変換後フラクション = f*scale + t を中心 0.5 に合わせる
+  return { scale, tx: 0.5 - cx * scale, ty: 0.5 - cy * scale };
+}
 
 export async function renderHome(
   _params: Record<string, string>,
@@ -69,7 +118,20 @@ export async function renderHome(
     role: "img",
     "aria-label": "日本地図。都道府県ごとの物語数を色の濃淡で表す"
   }) as HTMLCanvasElement;
-  mapFrame.append(baseCanvas, hiCanvas);
+  // ズームレイヤー: canvas 2枚をまとめ、地方ズーム時にこれへ transform をかける
+  // （カプセル入口や戻るボタンはこの外に置くのでズームの影響を受けない）
+  const zoomLayer = el("div", { class: "jp-map-zoom" });
+  zoomLayer.append(baseCanvas, hiCanvas);
+  mapFrame.append(zoomLayer);
+
+  // ---- 「日本全体へ戻る」ボタン（地方ズーム中のみ表示） ----
+  const backBtn = el(
+    "button",
+    { class: "map-back-btn", type: "button", "aria-label": "日本全体へ戻る" },
+    ["◀ 日本全体"]
+  ) as HTMLButtonElement;
+  backBtn.style.display = "none";
+  mapFrame.append(backBtn);
 
   // ---- タイムカプセルの入口: 地図右下の空いた海域にドット絵カプセルを重ねる ----
   const capsuleEntryWrap = el("div", { class: "capsule-entry-wrap" });
@@ -130,24 +192,46 @@ export async function renderHome(
     if (code) goToPref(code);
   });
 
-  // ---- hover状態: 都道府県が変わったときだけ再描画する ----
-  let hoverCode: number | null = null;
+  // ---- 2段階選択の状態: null=全国図（地方選択） / Region=地方ズーム中（都道府県選択） ----
+  let zoomedRegion: Region | null = null;
+  // hover 対象: 全国図では地方id、ズーム中では都道府県コード。変化時だけ再描画する。
+  let hoverKey: string | number | null = null;
 
-  function setHover(code: number | null): void {
-    if (code === hoverCode) return;
-    hoverCode = code;
+  function regionStoryCount(region: Region): number {
+    return region.codes.reduce((sum, c) => sum + (counts[String(c)] ?? 0), 0);
+  }
+
+  function clearHighlight(): void {
     const hctx = hiCanvas.getContext("2d");
-    if (hctx) drawPrefHighlight(hctx, JAPAN_MAP_W, JAPAN_MAP_H, code != null ? PREF_CELLS.get(code) : undefined);
-    if (code != null) {
-      const pref = PREF_BY_CODE[code];
-      const count = counts[String(code)] ?? 0;
-      msgBox.textContent = `${pref?.name ?? "不明"} ・ ${count}件の物語`;
+    if (hctx) drawPrefHighlight(hctx, JAPAN_MAP_W, JAPAN_MAP_H, undefined);
+  }
+
+  function setHover(key: string | number | null): void {
+    if (key === hoverKey) return;
+    hoverKey = key;
+    const hctx = hiCanvas.getContext("2d");
+    if (!hctx) return;
+    if (key == null) {
+      drawPrefHighlight(hctx, JAPAN_MAP_W, JAPAN_MAP_H, undefined);
+      msgBox.textContent = zoomedRegion ? `${zoomedRegion.name}地方 — 都道府県をえらぶ` : "";
+      return;
+    }
+    if (typeof key === "string") {
+      // 全国図: 地方ハイライト
+      const region = REGIONS.find((r) => r.id === key);
+      drawPrefHighlight(hctx, JAPAN_MAP_W, JAPAN_MAP_H, REGION_CELLS.get(key));
+      if (region) msgBox.textContent = `${region.name} ・ ${regionStoryCount(region)}件の物語`;
     } else {
-      msgBox.textContent = "";
+      // ズーム中: 都道府県ハイライト
+      drawPrefHighlight(hctx, JAPAN_MAP_W, JAPAN_MAP_H, PREF_CELLS.get(key));
+      const pref = PREF_BY_CODE[key];
+      const count = counts[String(key)] ?? 0;
+      msgBox.textContent = `${pref?.name ?? "不明"} ・ ${count}件の物語`;
     }
   }
 
   function cellFromEvent(e: { clientX: number; clientY: number }): [number, number] | null {
+    // getBoundingClientRect は CSS transform(ズーム) を反映するのでズーム中も式は共通
     const rect = hiCanvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     const relX = (e.clientX - rect.left) / rect.width;
@@ -169,18 +253,57 @@ export async function renderHome(
     return i >= 0 ? i + 1 : null;
   }
 
+  function enterRegion(region: Region): void {
+    zoomedRegion = region;
+    hoverKey = null;
+    const { scale, tx, ty } = regionTransform(REGION_BBOX.get(region.id)!);
+    zoomLayer.style.transformOrigin = "0 0";
+    zoomLayer.style.transform = `translate(${(tx * 100).toFixed(3)}%, ${(ty * 100).toFixed(3)}%) scale(${scale.toFixed(4)})`;
+    clearHighlight();
+    backBtn.style.display = "";
+    capsuleEntryWrap.style.display = "none"; // ズーム中は入口を隠す
+    msgBox.textContent = `${region.name}地方 — 都道府県をえらぶ`;
+    hiCanvas.setAttribute("aria-label", `${region.name}地方。都道府県をえらぶ`);
+  }
+
+  function exitRegion(): void {
+    zoomedRegion = null;
+    hoverKey = null;
+    zoomLayer.style.transform = "";
+    clearHighlight();
+    backBtn.style.display = "none";
+    capsuleEntryWrap.style.display = "";
+    msgBox.textContent = "";
+    hiCanvas.setAttribute("aria-label", "日本地図。地方をえらぶ");
+  }
+
+  backBtn.addEventListener("click", () => exitRegion());
+
   // マウス等ホバー可能な端末のみ hover ハイライトを追従させる。
-  // タッチ端末はホバー概念がないため、タップ即遷移でよい（シンプルな実装を優先）。
   const supportsHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
   const onPointerMove = (e: PointerEvent) => {
     if (!supportsHover) return;
-    setHover(codeFromCell(cellFromEvent(e)));
+    const code = codeFromCell(cellFromEvent(e));
+    if (zoomedRegion) {
+      // ズーム中: その地方に属する都道府県のみ反応
+      setHover(code != null && zoomedRegion.codes.includes(code) ? code : null);
+    } else {
+      // 全国図: 都道府県→地方に変換して地方でハイライト
+      const region = code != null ? REGION_BY_PREF[code] : undefined;
+      setHover(region ? region.id : null);
+    }
   };
   const onPointerLeave = () => setHover(null);
   const onClick = (e: MouseEvent) => {
     const code = codeFromCell(cellFromEvent(e));
-    if (code != null) goToPref(code);
+    if (code == null) return;
+    if (zoomedRegion) {
+      if (zoomedRegion.codes.includes(code)) goToPref(code);
+    } else {
+      const region = REGION_BY_PREF[code];
+      if (region) enterRegion(region);
+    }
   };
 
   hiCanvas.addEventListener("pointermove", onPointerMove);
@@ -188,8 +311,8 @@ export async function renderHome(
   hiCanvas.addEventListener("click", onClick);
 
   async function loadAndDraw(year: string): Promise<void> {
-    msgBox.textContent = "";
-    hoverCode = null;
+    if (!zoomedRegion) msgBox.textContent = "";
+    hoverKey = null;
     try {
       const summary = await mapSummary(year ? Number(year) : undefined);
       counts = summary.counts;

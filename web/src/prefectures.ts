@@ -91,3 +91,26 @@ export function storyMetaText(input: {
   if (input.season) parts.push(seasonLabel(input.season));
   return parts.join(" ・ ");
 }
+
+// ---- 地方区分（地図の2段階選択: 地方ズーム → 都道府県選択 用） ----
+export interface Region {
+  id: string;
+  name: string;
+  codes: number[]; // 所属する都道府県コード
+}
+
+export const REGIONS: Region[] = [
+  { id: "hokkaido", name: "北海道", codes: [1] },
+  { id: "tohoku", name: "東北", codes: [2, 3, 4, 5, 6, 7] },
+  { id: "kanto", name: "関東", codes: [8, 9, 10, 11, 12, 13, 14] },
+  { id: "chubu", name: "中部", codes: [15, 16, 17, 18, 19, 20, 21, 22, 23] },
+  { id: "kinki", name: "近畿", codes: [24, 25, 26, 27, 28, 29, 30] },
+  { id: "chugoku", name: "中国", codes: [31, 32, 33, 34, 35] },
+  { id: "shikoku", name: "四国", codes: [36, 37, 38, 39] },
+  { id: "kyushu", name: "九州・沖縄", codes: [40, 41, 42, 43, 44, 45, 46, 47] }
+];
+
+export const REGION_BY_PREF: Record<number, Region> = {};
+for (const r of REGIONS) {
+  for (const c of r.codes) REGION_BY_PREF[c] = r;
+}

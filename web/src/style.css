@@ -420,6 +420,14 @@ textarea {
   margin: 0 auto;
   border: 3px solid rgba(255, 255, 255, 0.55);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
+  overflow: hidden; /* 地方ズーム時に拡大したドット絵が枠外へはみ出さないように */
+}
+
+/* canvas 2枚をまとめるズームレイヤー。地方選択時にここへ transform をかける */
+.jp-map-zoom {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.5s ease;
 }
 
 .jp-map-canvas {
@@ -438,6 +446,38 @@ textarea {
 .jp-map-highlight:focus-visible {
   outline: 2px solid var(--c-gold);
   outline-offset: 2px;
+}
+
+/* 「日本全体へ戻る」ボタン: ズーム中に左上へ重ねる */
+.map-back-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  background: var(--c-win);
+  color: var(--c-win-text);
+  border: 2px solid var(--c-win-text);
+  box-shadow: 0 0 0 2px var(--c-win);
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.map-back-btn:hover,
+.map-back-btn:focus-visible {
+  border-color: var(--c-gold);
+  color: var(--c-gold);
+}
+
+.map-back-btn:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jp-map-zoom {
+    transition: none;
+  }
 }
 
 /* 都道府県名+件数のメッセージウィンドウ。hover中でないときは空にして
