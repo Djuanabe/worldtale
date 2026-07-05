@@ -1,5 +1,5 @@
 import { ApiRequestError, StorySummary, getUser, listStories } from "../api";
-import { prefName } from "../prefectures";
+import { compareChronological, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode } from "../ui";
 
 export async function renderUserPage(
@@ -20,25 +20,24 @@ export async function renderUserPage(
     container.append(
       el("div", { class: "card" }, [
         el("h1", { class: "page-title", style: "border-bottom:none" }, [user.username]),
-        el("p", { class: "hint" }, [`ID: ${user.handle} ・ 物語 ${user.storyCount}件`])
+        el("p", { class: "hint" }, [`物語 ${user.storyCount}件 ・ 古い順にたどれます`])
       ])
     );
 
-    const stories = [...storyResult.stories].sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.createdAt.localeCompare(b.createdAt);
-    });
+    // 時系列（年→季節）で古い順に並べ、その人の歩みをたどれるようにする
+    const stories = [...storyResult.stories].sort(compareChronological);
 
     if (stories.length === 0) {
       container.append(el("p", { class: "empty-text" }, ["まだ物語がありません。"]));
       return;
     }
 
-    const timeline = el("div", { class: "story-list" });
+    // 紙風のタイムライン（一枚の紙に綴じられた日記のように）
+    const scroll = el("div", { class: "paper-scroll" });
     for (const s of stories) {
-      timeline.append(buildTimelineItem(s));
+      scroll.append(buildPaperEntry(s));
     }
-    container.append(timeline);
+    container.append(scroll);
   } catch (e) {
     container.innerHTML = "";
     if (e instanceof ApiRequestError && e.status === 404) {
@@ -49,10 +48,10 @@ export async function renderUserPage(
   }
 }
 
-function buildTimelineItem(s: StorySummary): HTMLElement {
-  return el("div", { class: "story-item" }, [
-    el("h3", {}, [el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])]),
-    el("div", { class: "story-meta" }, [`${s.year}年 ・ ${prefName(s.prefecture)}`]),
-    el("p", { class: "story-excerpt" }, [s.excerpt])
+function buildPaperEntry(s: StorySummary): HTMLElement {
+  return el("a", { class: "paper-entry", href: `/story/${s.id}`, "data-link": true }, [
+    el("div", { class: "paper-entry-meta" }, [storyMetaText(s)]),
+    el("h3", { class: "paper-entry-title" }, [s.title]),
+    el("p", { class: "paper-entry-excerpt" }, [s.excerpt])
   ]);
 }

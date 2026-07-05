@@ -1,5 +1,5 @@
 import { MyStory, Photo, deletePhoto, isLoggedIn, myPhotos, myStories } from "../api";
-import { prefName, seasonLabel, storyMetaText } from "../prefectures";
+import { compareChronological, prefName, seasonLabel, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, pageTitle } from "../ui";
 import { navigate } from "../router";
 import { buildAuthorShareRow } from "./story";
@@ -29,7 +29,7 @@ export async function renderMePage(
   try {
     const { stories } = await myStories();
     storySection.innerHTML = "";
-    storySection.append(el("h2", {}, ["投稿した物語"]), buildStoryTable(stories));
+    storySection.append(el("h2", {}, ["投稿した物語"]), buildStoryList(stories));
   } catch {
     storySection.innerHTML = "";
     storySection.append(el("h2", {}, ["投稿した物語"]), errorNode("読み込みに失敗しました。"));
@@ -45,42 +45,39 @@ export async function renderMePage(
   }
 }
 
-function buildStoryTable(stories: MyStory[]): HTMLElement {
+function buildStoryList(stories: MyStory[]): HTMLElement {
   if (stories.length === 0) {
     return el("p", { class: "empty-text" }, ["まだ物語を投稿していません。"]);
   }
-  const table = el("table", { class: "stat-table" });
-  const thead = el("thead", {}, [
-    el("tr", {}, [
-      el("th", {}, ["タイトル"]),
-      el("th", {}, ["場所・年"]),
-      el("th", {}, ["閲覧数"]),
-      el("th", {}, ["いいね"]),
-      el("th", {}, ["出会ってたかも"]),
-      el("th", {}, ["状態"]),
-      el("th", {}, ["操作"])
-    ])
-  ]);
-  const tbody = el("tbody", {});
-  for (const s of stories) {
+  // 時系列（年→季節）で古い順に。紙風のカードで綴じる
+  const sorted = [...stories].sort(compareChronological);
+  const scroll = el("div", { class: "paper-scroll" });
+  for (const s of sorted) {
+    const meta = el("div", { class: "paper-entry-meta" }, [
+      storyMetaText(s),
+      s.isHidden ? " ・ 非公開" : ""
+    ]);
+    const stats = el("div", { class: "paper-entry-stats" }, [
+      el("span", {}, [`👁 ${s.views}`]),
+      el("span", {}, [`♡ ${s.likeCount}`]),
+      el("span", {}, [`⛩ ${s.metCount}`])
+    ]);
     const ops = el("div", { class: "me-ops" }, [
-      el("a", { href: `/story/${s.id}/edit`, "data-link": true }, ["編集"]),
+      el("a", { class: "btn btn-small", href: `/story/${s.id}/edit`, "data-link": true }, ["編集"]),
       buildAuthorShareRow(s.title, s.id) // 私の物語として共有 + そっと共有
     ]);
-    tbody.append(
-      el("tr", {}, [
-        el("td", {}, [el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])]),
-        el("td", {}, [storyMetaText(s)]),
-        el("td", {}, [String(s.views)]),
-        el("td", {}, [String(s.likeCount)]),
-        el("td", {}, [String(s.metCount)]),
-        el("td", {}, [s.isHidden ? "非公開" : "公開中"]),
-        el("td", {}, [ops])
+    scroll.append(
+      el("div", { class: "paper-entry paper-entry-static" }, [
+        meta,
+        el("h3", { class: "paper-entry-title" }, [
+          el("a", { href: `/story/${s.id}`, "data-link": true }, [s.title])
+        ]),
+        stats,
+        ops
       ])
     );
   }
-  table.append(thead, tbody);
-  return table;
+  return scroll;
 }
 
 function buildPhotoGrid(photos: Photo[], sectionHost: HTMLElement): HTMLElement {

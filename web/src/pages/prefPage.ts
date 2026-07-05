@@ -980,10 +980,13 @@ export async function renderPrefPage(
     const bottomRow = el("div", { class: "reader-bottom" });
     const avatarSvg = buildPersonSvg(scheme, 170, "front"); // 大アバターは正面で静止
     avatarSvg.classList.add("reader-avatar");
+    // アバターの下にユーザー名（物語読み込み後に埋める）
+    const avatarName = el("a", { class: "reader-avatar-name", "data-noadvance": "true" });
+    const avatarWrap = el("div", { class: "reader-avatar-wrap" }, [avatarSvg, avatarName]);
     const bottomRight = el("div", { class: "reader-bottom-right" });
     const nextBtn = el("button", { class: "btn reader-advance" }, ["つづき"]) as HTMLButtonElement;
     bottomRight.append(nextBtn);
-    bottomRow.append(avatarSvg, bottomRight);
+    bottomRow.append(avatarWrap, bottomRight);
     stage.append(stream, bottomRow);
 
     overlay.append(bg, dim, paper, closeBtn, stage);
@@ -1059,6 +1062,11 @@ export async function renderPrefPage(
       }
       if (disposed || readerEl !== overlay) return;
       story = loaded;
+
+      // アバターの下に主人公のユーザー名（ユーザーページへのリンク）
+      avatarName.textContent = story.username;
+      avatarName.setAttribute("href", `/u/${story.userHandle}`);
+      avatarName.setAttribute("data-link", "true");
 
       if (story.photos.length > 0) {
         const photoUrl = story.photos[0].url;

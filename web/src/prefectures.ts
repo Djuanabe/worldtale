@@ -76,6 +76,20 @@ export function seasonLabel(key: string): string {
   return SEASONS.find((s) => s.key === key)?.label ?? key;
 }
 
+const SEASON_ORDER: Record<string, number> = { spring: 0, summer: 1, autumn: 2, winter: 3 };
+
+// 時系列（年→季節の順）で古い順に並べる比較関数。
+// season が無い古いデータは、その年の末尾（冬の後）に置く。
+export function compareChronological(
+  a: { year: number; season?: string | null },
+  b: { year: number; season?: string | null }
+): number {
+  if (a.year !== b.year) return a.year - b.year;
+  const sa = a.season ? SEASON_ORDER[a.season] ?? 4 : 4;
+  const sb = b.season ? SEASON_ORDER[b.season] ?? 4 : 4;
+  return sa - sb;
+}
+
 // 物語のメタ情報（都道府県・市区町村・年・季節）を表示用テキストにする。
 // municipality/season が null の古いデータでも崩れないよう、あれば足す形にする。
 export function storyMetaText(input: {

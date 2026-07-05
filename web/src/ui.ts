@@ -1,5 +1,6 @@
 import { isLoggedIn, setToken } from "./api";
 import { navigate } from "./router";
+import { buildWorldTaleIcon } from "./icon";
 
 // ---- 要素生成ヘルパー（XSS対策のため textContent を用いる） ----
 
@@ -48,8 +49,10 @@ export function renderHeader(): void {
 
   const inner = el("div", { class: "header-inner" });
 
+  const brandMark = el("span", { class: "brand-mark" });
+  brandMark.append(buildWorldTaleIcon(30));
   const brand = el("a", { href: "/", "data-link": true, class: "brand" }, [
-    el("span", { class: "brand-mark" }, ["物"]),
+    brandMark,
     el("span", { class: "brand-text" }, ["WorldTale"])
   ]);
 
