@@ -8,6 +8,19 @@ Supabase（DB・ストレージ）＋ Cloudflare Workers（API）＋ Cloudflare 
 > 依存の順序: **API を先にデプロイ**して URL を得る → その URL で **Web をビルド/デプロイ** →
 > Web の URL を **API の `ALLOWED_ORIGIN`** に設定して API を再デプロイ、という順で進めます。
 
+### 本番の確定値（この構成で進める）
+
+| 項目 | 値 |
+|---|---|
+| ドメイン（ゾーン） | `comus.jp`（Cloudflare にネームサーバーを移す） |
+| サイト本体（Pages） | `worldtale.comus.jp` |
+| API（Workers） | `worldtale-api.comus.jp` |
+| Web の `VITE_API_BASE` | `https://worldtale-api.comus.jp` |
+| API の `ALLOWED_ORIGIN` | `https://worldtale.comus.jp` |
+
+以下の手順中 `example.com` 等の表記が出たら、上表の値に読み替えてください。
+ドメイン割り当ての詳細は「4.5 独自ドメイン」を参照。
+
 ---
 
 ## 1. Supabase（DB・ストレージ）
@@ -93,50 +106,55 @@ npm run deploy
 
 ---
 
-## 4.5 独自ドメイン（お名前.com で購入したドメイン）
+## 4.5 独自ドメイン（`comus.jp` のサブドメインを使う）
 
-構成: **本体 = `example.com`（+ `www.example.com`）／ API = `api.example.com`**
-（`example.com` は購入したドメインに読み替え）。
+構成: **本体 = `worldtale.comus.jp` ／ API = `worldtale-api.comus.jp`**。
+サブドメインだけを使う場合でも、API（Workers）のカスタムドメインには
+**ゾーン `comus.jp` を Cloudflare で管理している必要がある**ため、
+ネームサーバーごと Cloudflare に移すのが最も確実です。
+
+> ⚠️ 事前確認: `comus.jp` を**メールや他サイトで既に使っている**場合、
+> ネームサーバーを移すとそれらの DNS レコードが引き継がれません。
+> 手順1の途中で Cloudflare が既存レコードをスキャンするので、
+> **既存の MX・A・CNAME・TXT レコードが Cloudflare 側に取り込まれているか必ず確認**し、
+> 足りなければ手動で追加してから NS を切り替えてください。
+> `comus.jp` が未使用（このサイト専用）なら、そのまま進めて問題ありません。
 
 ### 手順1: ネームサーバーを Cloudflare に向ける（一度だけ）
 
-1. Cloudflare ダッシュボード → **Add a site** → `example.com` を入力 → Free プランを選択。
-2. Cloudflare が既存DNSをスキャン後、**2つのネームサーバー**（例
-   `xxx.ns.cloudflare.com` / `yyy.ns.cloudflare.com`）が提示される。
-3. **お名前.com** にログイン → 「ネームサーバーの設定」→ 対象ドメイン →
-   「その他のサービス（他社ネームサーバー）を利用」を選び、上記2つを登録して保存。
-4. 反映まで数分〜最大24時間。Cloudflare 側で `Active` になれば完了。
-   （反映後は DNS 管理は Cloudflare 側で行う。お名前.com 側の DNSレコードは使われない）
+1. Cloudflare ダッシュボード → **Add a site** → `comus.jp` を入力 → Free プランを選択。
+2. Cloudflare が既存DNSをスキャン → 取り込まれたレコードを確認（上の事前確認を参照）。
+3. **2つのネームサーバー**（例 `xxx.ns.cloudflare.com` / `yyy.ns.cloudflare.com`）が提示される。
+4. **お名前.com** → 「ネームサーバーの設定」→ `comus.jp` → 「他社ネームサーバーを利用」を選び、
+   上記2つを登録して保存。
+5. 反映まで数分〜最大24時間。Cloudflare 側で `comus.jp` が `Active` になれば完了。
 
-### 手順2: Web（Pages）に apex と www を割り当て
+### 手順2: Web（Pages）に worldtale.comus.jp を割り当て
 
 1. Cloudflare **Pages** → プロジェクト `worldtale` → **Custom domains** → **Set up a domain**。
-2. `example.com` を追加 → 続けて `www.example.com` も追加。
-   - Pages が必要な CNAME/ALIAS レコードを自動作成し、SSL証明書も自動発行。
-   - apex（`example.com`）は Cloudflare の CNAMEフラット化で問題なく使える。
-3. どちらか一方を正にしたい場合は、Cloudflare の **Redirect Rules** で
-   `www → apex`（またはその逆）に 301 リダイレクトを設定。
+2. `worldtale.comus.jp` を追加。
+   - Pages が CNAME レコードを自動作成、SSL証明書も自動発行。
+   - 反映後 `https://worldtale.comus.jp` でサイトが開く。
 
-### 手順3: API（Workers）に api.example.com を割り当て
+### 手順3: API（Workers）に worldtale-api.comus.jp を割り当て
 
 1. Cloudflare **Workers & Pages** → `worldtale-api` → **Settings → Domains & Routes** →
-   **Add → Custom Domain** → `api.example.com` を追加（DNSレコードとSSLは自動）。
-2. これで `https://api.example.com/api/health` が使えるようになる。
+   **Add → Custom Domain** → `worldtale-api.comus.jp` を追加（DNSレコードとSSLは自動）。
+2. `https://worldtale-api.comus.jp/api/health` → `{"ok":true}` を確認。
 
 ### 手順4: 設定値をドメインに更新して再デプロイ
 
-- **Web**: Pages の環境変数 `VITE_API_BASE` を `https://api.example.com` に変更 → 再デプロイ
+- **Web**: Pages の環境変数 `VITE_API_BASE` = `https://worldtale-api.comus.jp` に設定 → 再デプロイ
   （Deployments → Retry deployment、または再push）。
 - **API**: 許可オリジンを本体ドメインに限定:
   ```bash
   cd api
-  npx wrangler secret put ALLOWED_ORIGIN   # https://example.com
+  npx wrangler secret put ALLOWED_ORIGIN   # https://worldtale.comus.jp
   npm run deploy
   ```
-  - www も直接使わせる場合は、apex に一本化（www→apex リダイレクト）しておくと
-    `ALLOWED_ORIGIN` を1つに保てる（当実装は複数オリジン非対応のため）。
 
-> メールは使わないサービスなので、ドメインのメール（MXレコード）設定は不要です。
+> メールは使わないサービスなので、このサイトのためのメール（MX）設定は不要です
+> （`comus.jp` を既にメールで使っている場合は、手順1で既存 MX を引き継ぐこと）。
 
 ---
 
