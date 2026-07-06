@@ -53,28 +53,17 @@ stroke(cxm-4,0.6, cxm-2.4,4.2, 0.5)
 stroke(cxm,-0.2, cxm,3.8, 0.5)
 stroke(cxm+4,0.6, cxm+2.4,4.2, 0.5)
 
-# 小さな手を袖の下に垂らす(小さめの塗り・指2〜3本、下向き)
-HAND = [
-    "..##..",
-    ".####.",
-    "######",
-    "######",
-    "#.##.#",
-    "#.##.#",
-    "..#.#.",
-]
-def stamp_hand(ox, oy, mirror=False):
-    # 手首(袖口→手)
-    stroke(ox+3.0, oy-2.0, ox+2.6, oy+0.2, 0.5, mirror=mirror)
-    for jy,row in enumerate(HAND):
-        for ix,ch in enumerate(row):
-            if ch!='#': continue
-            x=ox+ix; y=oy+jy
-            if mirror: x=W-1-x
-            if 0<=x<W and 0<=y<H: G[y][x]=True
-# 左手は中央よりやや左、右手は対称。中央に隙間→触れ合わない
-stamp_hand(13, 25, mirror=False)
-stamp_hand(13, 25, mirror=True)
+# 手は小さな丸。袖口から短い手首でつなぎ、下に垂らす。左右は中央に隙間→触れ合わない
+def stamp_hand(mirror=False):
+    cx0, cy0, r = 16.2, 28.3, 2.3   # 丸の中心と半径
+    # 手首(袖口→丸)
+    stroke(17.0, 24.3, cx0, cy0-r, 0.5, mirror=mirror)
+    for y in range(H):
+        for x in range(W):
+            xx = W-1-x if mirror else x
+            if (xx-cx0)**2 + (y-cy0)**2 <= r*r:
+                G[y][x] = True
+stamp_hand(False); stamp_hand(True)
 
 grid=[['X' if G[y][x] else '.' for x in range(W)] for y in range(H)]
 for row in grid: print(''.join('#' if c=='X' else ' ' for c in row))
