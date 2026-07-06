@@ -10,12 +10,16 @@ Supabase（DB・ストレージ）＋ Cloudflare Workers（API）＋ Cloudflare 
 
 ### 本番の確定値（この構成で進める）
 
+`comus.jp` は**既にメール等で使用中**のため、ネームサーバーは移さず、
+**サイト本体だけをサブドメインの CNAME で Cloudflare に向ける**構成にする（既存のメール・他サイトに影響なし）。
+API はカスタムドメインを付けず、Cloudflare 既定の `*.workers.dev` URL のまま使う
+（API の URL はブラウザの通信先として使うだけで、利用者が直接目にする画面URLは本体ドメイン）。
+
 | 項目 | 値 |
 |---|---|
-| ドメイン（ゾーン） | `comus.jp`（Cloudflare にネームサーバーを移す） |
-| サイト本体（Pages） | `worldtale.comus.jp` |
-| API（Workers） | `worldtale-api.comus.jp` |
-| Web の `VITE_API_BASE` | `https://worldtale-api.comus.jp` |
+| サイト本体（Pages） | `worldtale.comus.jp`（お名前.com に CNAME を追加） |
+| API（Workers） | `https://worldtale-api.<account>.workers.dev`（既定URL・移管不要） |
+| Web の `VITE_API_BASE` | `https://worldtale-api.<account>.workers.dev`（手順2で判明する実URL） |
 | API の `ALLOWED_ORIGIN` | `https://worldtale.comus.jp` |
 
 以下の手順中 `example.com` 等の表記が出たら、上表の値に読み替えてください。
@@ -106,55 +110,54 @@ npm run deploy
 
 ---
 
-## 4.5 独自ドメイン（`comus.jp` のサブドメインを使う）
+## 4.5 独自ドメイン（`comus.jp` は使用中 → ネームサーバーは移さない）
 
-構成: **本体 = `worldtale.comus.jp` ／ API = `worldtale-api.comus.jp`**。
-サブドメインだけを使う場合でも、API（Workers）のカスタムドメインには
-**ゾーン `comus.jp` を Cloudflare で管理している必要がある**ため、
-ネームサーバーごと Cloudflare に移すのが最も確実です。
+`comus.jp` を既にメール・他サイトで使っているため、**ネームサーバーは移管しない**。
+サイト本体だけを **CNAME でサブドメインを Cloudflare Pages に向ける**（既存DNSに影響なし）。
+API はカスタムドメインを付けず、既定の `*.workers.dev` を使う
+（Workers のカスタムドメインはゾーンを Cloudflare 管理下に置く必要があり、移管が前提になるため）。
 
-> ⚠️ 事前確認: `comus.jp` を**メールや他サイトで既に使っている**場合、
-> ネームサーバーを移すとそれらの DNS レコードが引き継がれません。
-> 手順1の途中で Cloudflare が既存レコードをスキャンするので、
-> **既存の MX・A・CNAME・TXT レコードが Cloudflare 側に取り込まれているか必ず確認**し、
-> 足りなければ手動で追加してから NS を切り替えてください。
-> `comus.jp` が未使用（このサイト専用）なら、そのまま進めて問題ありません。
+> この方式なら、お名前.com の DNS はそのまま。**追加するのは CNAME 1本だけ**なので、
+> 既存のメール（MX）や他サイトのレコードは一切触りません。
 
-### 手順1: ネームサーバーを Cloudflare に向ける（一度だけ）
+### 手順1: Web（Pages）を先にデプロイ
 
-1. Cloudflare ダッシュボード → **Add a site** → `comus.jp` を入力 → Free プランを選択。
-2. Cloudflare が既存DNSをスキャン → 取り込まれたレコードを確認（上の事前確認を参照）。
-3. **2つのネームサーバー**（例 `xxx.ns.cloudflare.com` / `yyy.ns.cloudflare.com`）が提示される。
-4. **お名前.com** → 「ネームサーバーの設定」→ `comus.jp` → 「他社ネームサーバーを利用」を選び、
-   上記2つを登録して保存。
-5. 反映まで数分〜最大24時間。Cloudflare 側で `comus.jp` が `Active` になれば完了。
+「3. Web（Cloudflare Pages）」の手順で Pages にデプロイし、`worldtale.pages.dev` を発行しておく
+（`VITE_API_BASE` には手順2の API の workers.dev URL を入れる）。
 
-### 手順2: Web（Pages）に worldtale.comus.jp を割り当て
+### 手順2: Pages にカスタムドメインを追加（外部DNSモード）
 
 1. Cloudflare **Pages** → プロジェクト `worldtale` → **Custom domains** → **Set up a domain**。
-2. `worldtale.comus.jp` を追加。
-   - Pages が CNAME レコードを自動作成、SSL証明書も自動発行。
-   - 反映後 `https://worldtale.comus.jp` でサイトが開く。
+2. `worldtale.comus.jp` を入力。ゾーンが Cloudflare に無いので、
+   Cloudflare は**追加すべき CNAME レコード**（ターゲット: `worldtale.pages.dev`）を表示する。
+3. **お名前.com** の DNS 設定でそのレコードを追加:
+   - タイプ: `CNAME`
+   - ホスト名: `worldtale`（＝`worldtale.comus.jp`）
+   - VALUE: `worldtale.pages.dev`
+   - TTL: 既定でOK
+4. 保存後、Cloudflare が CNAME を検知して SSL 証明書を自動発行（数分〜）。
+   `Active` になれば `https://worldtale.comus.jp` でサイトが開く。
 
-### 手順3: API（Workers）に worldtale-api.comus.jp を割り当て
+### 手順3: 設定値を更新
 
-1. Cloudflare **Workers & Pages** → `worldtale-api` → **Settings → Domains & Routes** →
-   **Add → Custom Domain** → `worldtale-api.comus.jp` を追加（DNSレコードとSSLは自動）。
-2. `https://worldtale-api.comus.jp/api/health` → `{"ok":true}` を確認。
-
-### 手順4: 設定値をドメインに更新して再デプロイ
-
-- **Web**: Pages の環境変数 `VITE_API_BASE` = `https://worldtale-api.comus.jp` に設定 → 再デプロイ
-  （Deployments → Retry deployment、または再push）。
-- **API**: 許可オリジンを本体ドメインに限定:
+- **Web**: Pages の環境変数 `VITE_API_BASE` は API の workers.dev URL のまま
+  （例 `https://worldtale-api.<account>.workers.dev`）。ドメイン化しないので変更不要。
+- **API**: 許可オリジンを本体ドメインに限定して再デプロイ:
   ```bash
   cd api
   npx wrangler secret put ALLOWED_ORIGIN   # https://worldtale.comus.jp
   npm run deploy
   ```
 
-> メールは使わないサービスなので、このサイトのためのメール（MX）設定は不要です
-> （`comus.jp` を既にメールで使っている場合は、手順1で既存 MX を引き継ぐこと）。
+> メール（MX）設定はこのサイトのためには不要。既存の `comus.jp` のメール設定は
+> ネームサーバーを移さないのでそのまま有効です。
+
+### （任意）将来 API も `worldtale-api.comus.jp` にしたい場合
+
+Workers のカスタムドメインはゾーンを Cloudflare 管理下に置く必要があるため、
+その時は `comus.jp` のネームサーバーを Cloudflare に移管する（無料）。
+ただし移管前に、**お名前.com の既存レコード（MX・SPF/DKIM/DMARC の TXT・他サイトの A/CNAME）を
+Cloudflare 側に漏れなく再登録**してから NS を切り替えること。未使用ドメインでない限り必須の注意点。
 
 ---
 
