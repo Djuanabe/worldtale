@@ -53,11 +53,9 @@ stroke(cxm-4,0.6, cxm-2.4,4.2, 0.5)
 stroke(cxm,-0.2, cxm,3.8, 0.5)
 stroke(cxm+4,0.6, cxm+2.4,4.2, 0.5)
 
-# 手は小さな丸。袖口から短い手首でつなぎ、下に垂らす。左右は中央に隙間→触れ合わない
+# 手は小さな丸(手首なし)。袖口の近くに垂らす。左右は中央に隙間→触れ合わない
 def stamp_hand(mirror=False):
-    cx0, cy0, r = 16.2, 28.3, 2.3   # 丸の中心と半径
-    # 手首(袖口→丸)
-    stroke(17.0, 24.3, cx0, cy0-r, 0.5, mirror=mirror)
+    cx0, cy0, r = 15.8, 27.3, 2.2
     for y in range(H):
         for x in range(W):
             xx = W-1-x if mirror else x
