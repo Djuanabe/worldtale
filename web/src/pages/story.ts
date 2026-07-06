@@ -12,6 +12,7 @@ import {
 import { PREF_BY_CODE, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, openModal } from "../ui";
 import { navigate } from "../router";
+import { buildMetIcon } from "../icon";
 
 function twitterIntentUrl(text: string, url: string): string {
   const sp = new URLSearchParams({ text, url });
@@ -194,10 +195,11 @@ export async function renderStoryPage(
     { class: "reaction-btn" + (reacted.like ? " active" : "") },
     [`♡ いいね (${story.likeCount})`]
   ) as HTMLButtonElement;
+  const metLabel = el("span", {}, [`出会ってたかも (${story.metCount})`]);
   const metBtn = el(
     "button",
     { class: "reaction-btn" + (reacted.met ? " active" : "") },
-    [`⛩ 出会ってたかも (${story.metCount})`]
+    [buildMetIcon(), metLabel]
   ) as HTMLButtonElement;
 
   function bindReaction(btn: HTMLButtonElement, type: "like" | "met") {
@@ -209,7 +211,7 @@ export async function renderStoryPage(
         story.metCount = res.metCount;
         reacted = res.reacted;
         likeBtn.textContent = `♡ いいね (${story.likeCount})`;
-        metBtn.textContent = `⛩ 出会ってたかも (${story.metCount})`;
+        metLabel.textContent = `出会ってたかも (${story.metCount})`;
         likeBtn.classList.toggle("active", reacted.like);
         metBtn.classList.toggle("active", reacted.met);
       } catch {

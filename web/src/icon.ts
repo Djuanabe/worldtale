@@ -73,3 +73,54 @@ export function buildWorldTaleIcon(sizePx: number): SVGSVGElement {
   }
   return svg;
 }
+// 「出会ってたかも」アイコン: すれ違いざまに袖が触れ合う2人（ドット絵・単色）。
+// 手描きラフを整えたもの。currentColor を継承し、ボタン文字色になじむ。
+const MET_W = 26;
+const MET_H = 18;
+const MET_ROWS: string[] = [
+  "..........................",
+  "......X............X......",
+  ".....XXX..........XXX.....",
+  ".....XXX..........XXX.....",
+  "......X............X......",
+  "....XXXXX........XXXXX....",
+  "....XXXXXXX....XXXXXXX....",
+  "....XXXXXXXXXXXXXXXXXX....",
+  ".....XXX....XX....XXX.....",
+  ".....XXX..........XXX.....",
+  ".....XXX..........XXX.....",
+  ".....XXX..........XXX.....",
+  ".....X.X..........X.X.....",
+  "....XX.XX........XX.XX....",
+  "....XX.XX........XX.XX....",
+  "....XX.XXX......XXX.XX....",
+  "...XXX..XX......XX..XXX...",
+  "..........................",
+];
+
+export function buildMetIcon(): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${MET_W} ${MET_H}`);
+  svg.setAttribute("shape-rendering", "crispEdges");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("met-icon");
+  for (let y = 0; y < MET_H; y++) {
+    const row = MET_ROWS[y];
+    let x = 0;
+    while (x < MET_W) {
+      if (row[x] !== "X") { x++; continue; }
+      let run = 1;
+      while (x + run < MET_W && row[x + run] === "X") run++;
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", String(x));
+      rect.setAttribute("y", String(y));
+      rect.setAttribute("width", String(run));
+      rect.setAttribute("height", "1");
+      rect.setAttribute("fill", "currentColor");
+      svg.append(rect);
+      x += run;
+    }
+  }
+  return svg;
+}

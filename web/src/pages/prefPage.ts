@@ -13,6 +13,7 @@ import { el, errorNode, yearOptions } from "../ui";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
 import { buildViewerShareRow, openReportModal } from "./story";
+import { buildMetIcon } from "../icon";
 
 // ---- シーン定数 ----
 const HORIZON = 0.44; // 地平線（シーン高さに対する割合）
@@ -1126,8 +1127,10 @@ export async function renderPrefPage(
       const actions = el("div", { class: "reader-actions", "data-noadvance": "true" });
 
       const likeBtn = el("button", { class: "reaction-btn" }, ["♡ いいね"]) as HTMLButtonElement;
+      const metLabel = el("span", {}, ["出会ってたかも"]);
       const metBtn = el("button", { class: "reaction-btn" }, [
-        "⛩ 出会ってたかも"
+        buildMetIcon(),
+        metLabel
       ]) as HTMLButtonElement;
 
       function paint(
@@ -1136,7 +1139,7 @@ export async function renderPrefPage(
         reacted: { like: boolean; met: boolean }
       ): void {
         likeBtn.textContent = `♡ いいね (${likeCount})`;
-        metBtn.textContent = `⛩ 出会ってたかも (${metCount})`;
+        metLabel.textContent = `出会ってたかも (${metCount})`;
         likeBtn.classList.toggle("active", reacted.like);
         metBtn.classList.toggle("active", reacted.met);
       }

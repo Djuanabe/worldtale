@@ -3,6 +3,7 @@ import { compareChronological, prefName, seasonLabel, storyMetaText } from "../p
 import { el, errorNode, loadingNode, pageTitle } from "../ui";
 import { navigate } from "../router";
 import { buildAuthorShareRow } from "./story";
+import { buildMetIcon } from "../icon";
 
 export async function renderMePage(
   _params: Record<string, string>,
@@ -60,7 +61,7 @@ function buildStoryList(stories: MyStory[]): HTMLElement {
     const stats = el("div", { class: "paper-entry-stats" }, [
       el("span", {}, [`👁 ${s.views}`]),
       el("span", {}, [`♡ ${s.likeCount}`]),
-      el("span", {}, [`⛩ ${s.metCount}`])
+      el("span", { class: "stat-met" }, [buildMetIcon(), ` ${s.metCount}`])
     ]);
     const ops = el("div", { class: "me-ops" }, [
       el("a", { class: "btn btn-small", href: `/story/${s.id}/edit`, "data-link": true }, ["編集"]),

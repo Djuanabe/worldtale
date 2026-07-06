@@ -1680,3 +1680,21 @@ a.paper-entry:hover {
 .paper-entry .me-ops .share-row {
   display: contents;
 }
+
+/* 「出会ってたかも」アイコン: 文字と同じ高さで単色。ボタン/統計の文字色を継承 */
+.met-icon {
+  height: 1.15em;
+  width: auto;
+  vertical-align: -0.2em;
+  image-rendering: pixelated;
+}
+
+.reaction-btn .met-icon {
+  margin-right: 0.35em;
+}
+
+.paper-entry-stats .stat-met {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+}
