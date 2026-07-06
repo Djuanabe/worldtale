@@ -1896,3 +1896,123 @@ body.home-route .jp-map-frame {
 .tut-skip {
   margin-left: auto; /* スキップは右端に寄せる */
 }
+
+/* ==== 運営からの警告バナー ==== */
+.warning-banner {
+  position: sticky;
+  top: 0;
+  z-index: 8000;
+  background: var(--c-red);
+  color: #fff;
+  border-bottom: 3px solid var(--c-win-text);
+}
+.warning-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8px 14px;
+}
+.warning-msg {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.warning-item .btn {
+  flex: none;
+  background: #fff;
+  color: var(--c-red);
+  border-color: #fff;
+}
+
+/* ==== 管理（モデレーション）画面 ==== */
+.admin-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.admin-card {
+  background: var(--c-win);
+  color: var(--c-win-text);
+  border: 2px solid var(--c-win-text);
+  padding: 12px 14px;
+}
+.admin-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.admin-badge {
+  background: var(--c-gold);
+  color: var(--c-bg);
+  padding: 2px 8px;
+  font-size: 0.78rem;
+}
+.admin-status {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border: 1px solid var(--c-win-text);
+}
+.admin-status-open { color: var(--c-red-soft); }
+.admin-status-resolved { color: var(--c-green); }
+.admin-status-dismissed { color: var(--c-dim-text); }
+.admin-when {
+  font-size: 0.72rem;
+  color: var(--c-dim-text);
+  margin-left: auto;
+}
+.admin-target {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.admin-target h3 { margin: 4px 0; font-size: 1rem; }
+.admin-hidden-badge {
+  display: inline-block;
+  background: var(--c-red);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  margin-bottom: 4px;
+}
+.admin-excerpt {
+  margin: 4px 0;
+  font-size: 0.85rem;
+  color: var(--c-dim-text);
+  line-height: 1.5;
+}
+.admin-photo {
+  max-width: 200px;
+  height: auto;
+  image-rendering: auto;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.admin-author, .admin-detail, .admin-reporter {
+  margin: 4px 0;
+  font-size: 0.8rem;
+}
+.admin-detail { color: var(--c-red-soft); }
+.admin-reporter { color: var(--c-dim-text); }
+.admin-ops {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.admin-feedback {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--c-green);
+}

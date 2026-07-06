@@ -1,7 +1,8 @@
 import { sign, verify } from 'hono/jwt';
 import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../types';
-import { unauthorized } from './errors';
+import { forbidden, unauthorized } from './errors';
+import { getSupabase } from './supabase';
 
 // ---- パスワードハッシュ（WebCrypto PBKDF2-SHA256, 16byte salt）----
 // Cloudflare Workers の WebCrypto は deriveBits の反復回数を 100,000 までしか
@@ -145,6 +146,23 @@ export const requireAuth: MiddlewareHandler<Env> = async (c, next) => {
   } catch {
     throw unauthorized('トークンが無効です');
   }
+  await next();
+};
+
+// ---- 管理者のみ: requireAuth 済みの userId が is_admin か DB で確認する ----
+export const requireAdmin: MiddlewareHandler<Env> = async (c, next) => {
+  // 先に requireAuth を通す（トークン検証と userId 設定）
+  await requireAuth(c, async () => {});
+  const userId = c.get('userId');
+  if (!userId) throw unauthorized();
+  const sb = getSupabase(c.env);
+  const { data, error } = await sb
+    .from('users')
+    .select('is_admin')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.is_admin !== true) throw forbidden('管理者権限が必要です');
   await next();
 };
 

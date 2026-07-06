@@ -6,6 +6,7 @@ export interface User {
   publicId: string;
   username: string;
   handle: string;
+  isAdmin?: boolean;
 }
 
 export interface StorySummary {
@@ -99,6 +100,7 @@ export class ApiRequestError extends Error {
 
 const TOKEN_KEY = "wt_token";
 const ANON_KEY = "wt_anon";
+const ADMIN_KEY = "wt_is_admin";
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -109,7 +111,18 @@ export function setToken(token: string | null): void {
     localStorage.setItem(TOKEN_KEY, token);
   } else {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ADMIN_KEY); // ログアウト時に管理者フラグも消す
   }
+}
+
+// 管理者フラグのキャッシュ（ヘッダーの「管理」リンク表示判定用・真偽の判断はAPI側で行う）
+export function isAdminCached(): boolean {
+  return localStorage.getItem(ADMIN_KEY) === "1";
+}
+
+export function setAdminCached(v: boolean): void {
+  if (v) localStorage.setItem(ADMIN_KEY, "1");
+  else localStorage.removeItem(ADMIN_KEY);
 }
 
 export function isLoggedIn(): boolean {
@@ -340,4 +353,79 @@ export function submitReport(input: {
 
 export function mapSummary(year?: number): Promise<MapSummary> {
   return request(`/api/map/summary${qs({ year })}`);
+}
+
+// ---- 警告（本人向け） ----
+
+export interface Warning {
+  id: string;
+  message: string;
+  createdAt: string;
+}
+
+export function myWarnings(): Promise<{ warnings: Warning[] }> {
+  return request("/api/my/warnings");
+}
+
+export function ackWarning(id: string): Promise<void> {
+  return request(`/api/my/warnings/${encodeURIComponent(id)}/ack`, { method: "POST" });
+}
+
+// ---- 管理（モデレーション・管理者のみ） ----
+
+export interface AdminReport {
+  id: string;
+  targetType: "story" | "photo";
+  targetId: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: "open" | "resolved" | "dismissed";
+  createdAt: string;
+  reporterHandle: string;
+  target:
+    | {
+        exists: true;
+        isHidden: boolean;
+        title?: string;
+        excerpt?: string;
+        url?: string;
+        authorHandle: string;
+        authorUsername: string;
+      }
+    | { exists: false };
+}
+
+export function adminReports(status = "open"): Promise<{ reports: AdminReport[] }> {
+  return request(`/api/admin/reports${qs({ status })}`);
+}
+
+export function adminSetReportStatus(id: string, status: "open" | "resolved" | "dismissed"): Promise<void> {
+  return request(`/api/admin/reports/${encodeURIComponent(id)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status })
+  });
+}
+
+export function adminSetVisibility(
+  targetType: "story" | "photo",
+  id: string,
+  hidden: boolean
+): Promise<{ id: string; isHidden: boolean }> {
+  const path = targetType === "story" ? "stories" : "photos";
+  return request(`/api/admin/${path}/${encodeURIComponent(id)}/visibility`, {
+    method: "POST",
+    body: JSON.stringify({ hidden })
+  });
+}
+
+export function adminDeleteTarget(targetType: "story" | "photo", id: string): Promise<void> {
+  const path = targetType === "story" ? "stories" : "photos";
+  return request(`/api/admin/${path}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function adminWarn(handle: string, message: string): Promise<{ id: string }> {
+  return request("/api/admin/warnings", {
+    method: "POST",
+    body: JSON.stringify({ handle, message })
+  });
 }

@@ -9,6 +9,7 @@ import { users } from './routes/users';
 import { photos } from './routes/photos';
 import { reports } from './routes/reports';
 import { map } from './routes/map';
+import { admin } from './routes/admin';
 
 const app = new Hono<Env>();
 
@@ -33,6 +34,7 @@ api.route('/users', users);
 api.route('/photos', photos);
 api.route('/reports', reports);
 api.route('/map', map);
+api.route('/admin', admin);
 
 app.route('/api', api);
 

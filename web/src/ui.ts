@@ -1,4 +1,4 @@
-import { isLoggedIn, setToken } from "./api";
+import { isAdminCached, isLoggedIn, setToken } from "./api";
 import { navigate } from "./router";
 import { buildWorldTaleIcon } from "./icon";
 
@@ -61,6 +61,7 @@ export function renderHeader(): void {
 
   if (isLoggedIn()) {
     nav.append(link("/write", "書く"), link("/me", "マイページ"));
+    if (isAdminCached()) nav.append(link("/admin", "管理"));
     nav.append(
       el(
         "button",

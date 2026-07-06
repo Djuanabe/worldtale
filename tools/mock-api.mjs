@@ -7,9 +7,9 @@ const PORT = 8787;
 
 // ---- シードデータ ----
 const users = [
-  { id: "u1", publicId: "DEMO123456", handle: "H4NAK02340", username: "はなこ", password: "password123" },
-  { id: "u2", publicId: "KAZE789012", handle: "K4ZE571230", username: "かぜのたび", password: "password123" },
-  { id: "u3", publicId: "YUKI345678", handle: "YUK1893450", username: "ゆきぐに", password: "password123" },
+  { id: "u1", publicId: "DEMO123456", handle: "H4NAK02340", username: "はなこ", password: "password123", isAdmin: true },
+  { id: "u2", publicId: "KAZE789012", handle: "K4ZE571230", username: "かぜのたび", password: "password123", isAdmin: false },
+  { id: "u3", publicId: "YUKI345678", handle: "YUK1893450", username: "ゆきぐに", password: "password123", isAdmin: false },
 ];
 
 let storySeq = 0;
@@ -53,6 +53,19 @@ const photos = [
 const reactions = new Set();
 // follows: key = `${followerId}|${followingId}`（見守る）。デモ用に u1 は2人に見守られている。
 const follows = new Set(["u2|u1", "u3|u1"]);
+// warnings: 本人向けの運営からの警告
+let warnSeq = 0;
+const warnings = []; // { id, userId, message, createdAt, acknowledgedAt }
+// reports: 報告（管理画面用）。デモで1件シード。
+let reportSeq = 0;
+const reportList = [
+  { id: `r${++reportSeq}`, targetType: "story", targetId: "s7", reporterId: "u1",
+    reason: "personal_info", detail: "地名と実名が書かれている気がします", status: "open",
+    createdAt: new Date().toISOString() },
+];
+// story/photo の is_hidden 状態（シードは false）
+const hiddenStories = new Set();
+const hiddenPhotos = new Set();
 const reports = [];
 const tokens = new Map(); // token -> userId
 // アップロードされた画像の実データ（メモリ保持。再起動で消える）
@@ -224,7 +237,7 @@ const server = http.createServer(async (req, res) => {
     if (path === "/api/auth/me") {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
-      return json(res, 200, { user: { publicId: u.publicId, username: u.username, handle: u.handle } });
+      return json(res, 200, { user: { publicId: u.publicId, username: u.username, handle: u.handle, isAdmin: !!u.isAdmin } });
     }
 
     // ---- my ----
@@ -258,6 +271,7 @@ const server = http.createServer(async (req, res) => {
       const c = {};
       for (const s of stories) {
         if (year && s.year !== year) continue;
+        if (hiddenStories.has(s.id)) continue;
         c[String(s.prefecture)] = (c[String(s.prefecture)] ?? 0) + 1;
       }
       return json(res, 200, { counts: c });
@@ -343,8 +357,115 @@ const server = http.createServer(async (req, res) => {
       const u = authUser(req);
       if (!u) return err(res, 401, "UNAUTHORIZED", "報告にはログインが必要です");
       const b = JSON.parse((await readBody(req)).toString() || "{}");
-      reports.push({ ...b, reporterId: u.id });
-      return json(res, 201, { ok: true });
+      const rep = {
+        id: `r${++reportSeq}`, targetType: b.targetType, targetId: b.targetId,
+        reporterId: u.id, reason: b.reason, detail: b.detail ?? null,
+        status: "open", createdAt: new Date().toISOString(),
+      };
+      reportList.push(rep);
+      reports.push(rep);
+      return json(res, 201, { id: rep.id, status: "open" });
+    }
+
+    // ---- warnings（本人向け） ----
+    if (path === "/api/my/warnings" && req.method === "GET") {
+      const u = authUser(req);
+      if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
+      const list = warnings.filter((w) => w.userId === u.id && !w.acknowledgedAt)
+        .map((w) => ({ id: w.id, message: w.message, createdAt: w.createdAt }));
+      return json(res, 200, { warnings: list });
+    }
+    const warnAck = path.match(/^\/api\/my\/warnings\/([\w-]+)\/ack$/);
+    if (warnAck && req.method === "POST") {
+      const u = authUser(req);
+      if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
+      const w = warnings.find((x) => x.id === warnAck[1] && x.userId === u.id);
+      if (!w) return err(res, 404, "NOT_FOUND", "警告が見つかりません");
+      w.acknowledgedAt = new Date().toISOString();
+      return json(res, 200, { ok: true });
+    }
+
+    // ---- admin（管理者のみ） ----
+    if (path.startsWith("/api/admin/")) {
+      const u = authUser(req);
+      if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
+      if (!u.isAdmin) return err(res, 403, "FORBIDDEN", "管理者権限が必要です");
+
+      if (path === "/api/admin/reports" && req.method === "GET") {
+        const status = q.get("status") ?? "open";
+        const rows = reportList.filter((r) => status === "all" ? true : r.status === status)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const list = rows.map((r) => {
+          let target = { exists: false };
+          if (r.targetType === "story") {
+            const s = stories.find((x) => x.id === r.targetId);
+            if (s) {
+              const au = users.find((x) => x.id === s.userId);
+              target = { exists: true, isHidden: hiddenStories.has(s.id), title: s.title,
+                excerpt: s.body.replace(/\n/g, " ").slice(0, 160),
+                authorHandle: au?.handle ?? "", authorUsername: au?.username ?? "" };
+            }
+          } else {
+            const p = photos.find((x) => x.id === r.targetId);
+            if (p) {
+              const au = users.find((x) => x.id === p.userId);
+              target = { exists: true, isHidden: hiddenPhotos.has(p.id), url: photoUrl(p, origin),
+                authorHandle: au?.handle ?? "", authorUsername: au?.username ?? "" };
+            }
+          }
+          const rep = users.find((x) => x.id === r.reporterId);
+          return { id: r.id, targetType: r.targetType, targetId: r.targetId, reason: r.reason,
+            detail: r.detail ?? null, status: r.status, createdAt: r.createdAt,
+            reporterHandle: rep?.handle ?? "", target };
+        });
+        return json(res, 200, { reports: list });
+      }
+
+      const rptStatus = path.match(/^\/api\/admin\/reports\/([\w-]+)\/status$/);
+      if (rptStatus && req.method === "POST") {
+        const b = JSON.parse((await readBody(req)).toString() || "{}");
+        const r = reportList.find((x) => x.id === rptStatus[1]);
+        if (!r) return err(res, 404, "NOT_FOUND", "報告が見つかりません");
+        if (!["open", "resolved", "dismissed"].includes(b.status)) return err(res, 400, "VALIDATION", "status が不正です");
+        r.status = b.status;
+        return json(res, 200, { id: r.id, status: r.status });
+      }
+
+      const vis = path.match(/^\/api\/admin\/(stories|photos)\/([\w-]+)\/visibility$/);
+      if (vis && req.method === "POST") {
+        const b = JSON.parse((await readBody(req)).toString() || "{}");
+        if (typeof b.hidden !== "boolean") return err(res, 400, "VALIDATION", "hidden が必要です");
+        const set = vis[1] === "stories" ? hiddenStories : hiddenPhotos;
+        if (b.hidden) set.add(vis[2]); else set.delete(vis[2]);
+        return json(res, 200, { id: vis[2], isHidden: b.hidden });
+      }
+
+      const adel = path.match(/^\/api\/admin\/(stories|photos)\/([\w-]+)$/);
+      if (adel && req.method === "DELETE") {
+        if (adel[1] === "stories") {
+          const i = stories.findIndex((s) => s.id === adel[2]);
+          if (i < 0) return err(res, 404, "NOT_FOUND", "物語が見つかりません");
+          stories.splice(i, 1);
+        } else {
+          const i = photos.findIndex((p) => p.id === adel[2]);
+          if (i < 0) return err(res, 404, "NOT_FOUND", "写真が見つかりません");
+          photoBlobs.delete(photos[i].id);
+          photos.splice(i, 1);
+        }
+        return json(res, 200, { ok: true });
+      }
+
+      if (path === "/api/admin/warnings" && req.method === "POST") {
+        const b = JSON.parse((await readBody(req)).toString() || "{}");
+        const target = users.find((x) => x.handle === b.handle);
+        if (!target) return err(res, 404, "NOT_FOUND", "ユーザーが見つかりません");
+        if (!b.message) return err(res, 400, "VALIDATION", "message が必要です");
+        const w = { id: `w${++warnSeq}`, userId: target.id, message: String(b.message), createdAt: new Date().toISOString(), acknowledgedAt: null };
+        warnings.push(w);
+        return json(res, 201, { id: w.id });
+      }
+
+      return err(res, 404, "NOT_FOUND", "エンドポイントが見つかりません");
     }
 
     // ---- stories ----
@@ -356,6 +477,7 @@ const server = http.createServer(async (req, res) => {
         const u = users.find((x) => x.handle === q.get("userId"));
         list = u ? list.filter((s) => s.userId === u.id) : [];
       }
+      list = list.filter((s) => !hiddenStories.has(s.id));
       list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const page = Math.max(1, Number(q.get("page")) || 1);
       const limit = Math.min(50, Number(q.get("limit")) || 20);
@@ -428,6 +550,7 @@ const server = http.createServer(async (req, res) => {
       const s = stories.find((x) => x.id === storyMatch[1]);
       if (!s) return err(res, 404, "NOT_FOUND", "物語が見つかりません");
       if (req.method === "GET") {
+        if (hiddenStories.has(s.id)) return err(res, 404, "NOT_FOUND", "物語が見つかりません");
         s.views++;
         const u = users.find((x) => x.id === s.userId);
         return json(res, 200, {

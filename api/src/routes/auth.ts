@@ -87,10 +87,17 @@ auth.get('/me', requireAuth, async (c) => {
   const sb = getSupabase(c.env);
   const { data: user, error } = await sb
     .from('users')
-    .select('public_id, handle, username')
+    .select('public_id, handle, username, is_admin')
     .eq('id', c.get('userId'))
     .maybeSingle();
   if (error) throw error;
   if (!user) throw notFound('ユーザーが見つかりません');
-  return c.json({ user: { publicId: user.public_id, username: user.username, handle: user.handle } });
+  return c.json({
+    user: {
+      publicId: user.public_id,
+      username: user.username,
+      handle: user.handle,
+      isAdmin: user.is_admin === true,
+    },
+  });
 });

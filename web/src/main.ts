@@ -12,7 +12,9 @@ import { renderEditPage } from "./pages/edit";
 import { renderLoginPage } from "./pages/login";
 import { renderRegisterPage } from "./pages/register";
 import { renderMePage } from "./pages/me";
+import { renderAdminPage } from "./pages/admin";
 import { initTutorial } from "./tutorial";
+import { initSession } from "./session";
 
 addRoute("/", renderHome);
 addRoute("/p/:pref", renderPrefPage);
@@ -25,6 +27,7 @@ addRoute("/capsule", renderCapsulePage);
 addRoute("/login", renderLoginPage);
 addRoute("/register", renderRegisterPage);
 addRoute("/me", renderMePage);
+addRoute("/admin", renderAdminPage);
 
 setNotFound((_params, _query, container) => {
   container.append(pageTitle("ページが見つかりません"));
@@ -40,3 +43,4 @@ if (appRoot) {
 }
 
 initTutorial();
+void initSession();
