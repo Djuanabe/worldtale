@@ -93,6 +93,53 @@ npm run deploy
 
 ---
 
+## 4.5 独自ドメイン（お名前.com で購入したドメイン）
+
+構成: **本体 = `example.com`（+ `www.example.com`）／ API = `api.example.com`**
+（`example.com` は購入したドメインに読み替え）。
+
+### 手順1: ネームサーバーを Cloudflare に向ける（一度だけ）
+
+1. Cloudflare ダッシュボード → **Add a site** → `example.com` を入力 → Free プランを選択。
+2. Cloudflare が既存DNSをスキャン後、**2つのネームサーバー**（例
+   `xxx.ns.cloudflare.com` / `yyy.ns.cloudflare.com`）が提示される。
+3. **お名前.com** にログイン → 「ネームサーバーの設定」→ 対象ドメイン →
+   「その他のサービス（他社ネームサーバー）を利用」を選び、上記2つを登録して保存。
+4. 反映まで数分〜最大24時間。Cloudflare 側で `Active` になれば完了。
+   （反映後は DNS 管理は Cloudflare 側で行う。お名前.com 側の DNSレコードは使われない）
+
+### 手順2: Web（Pages）に apex と www を割り当て
+
+1. Cloudflare **Pages** → プロジェクト `worldtale` → **Custom domains** → **Set up a domain**。
+2. `example.com` を追加 → 続けて `www.example.com` も追加。
+   - Pages が必要な CNAME/ALIAS レコードを自動作成し、SSL証明書も自動発行。
+   - apex（`example.com`）は Cloudflare の CNAMEフラット化で問題なく使える。
+3. どちらか一方を正にしたい場合は、Cloudflare の **Redirect Rules** で
+   `www → apex`（またはその逆）に 301 リダイレクトを設定。
+
+### 手順3: API（Workers）に api.example.com を割り当て
+
+1. Cloudflare **Workers & Pages** → `worldtale-api` → **Settings → Domains & Routes** →
+   **Add → Custom Domain** → `api.example.com` を追加（DNSレコードとSSLは自動）。
+2. これで `https://api.example.com/api/health` が使えるようになる。
+
+### 手順4: 設定値をドメインに更新して再デプロイ
+
+- **Web**: Pages の環境変数 `VITE_API_BASE` を `https://api.example.com` に変更 → 再デプロイ
+  （Deployments → Retry deployment、または再push）。
+- **API**: 許可オリジンを本体ドメインに限定:
+  ```bash
+  cd api
+  npx wrangler secret put ALLOWED_ORIGIN   # https://example.com
+  npm run deploy
+  ```
+  - www も直接使わせる場合は、apex に一本化（www→apex リダイレクト）しておくと
+    `ALLOWED_ORIGIN` を1つに保てる（当実装は複数オリジン非対応のため）。
+
+> メールは使わないサービスなので、ドメインのメール（MXレコード）設定は不要です。
+
+---
+
 ## 5. 動作確認
 
 1. `https://worldtale.pages.dev` を開き、日本地図が表示される。
