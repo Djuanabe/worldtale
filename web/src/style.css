@@ -1670,7 +1670,13 @@ a.paper-entry:hover {
 
 .paper-entry .me-ops {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+/* マイページの操作ボタンを一行に: 共有行を平坦化して編集ボタンと同列に並べる */
+.paper-entry .me-ops .share-row {
+  display: contents;
 }
