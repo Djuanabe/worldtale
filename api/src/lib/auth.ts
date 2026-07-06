@@ -3,12 +3,22 @@ import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../types';
 import { unauthorized } from './errors';
 
-// ---- パスワードハッシュ（WebCrypto PBKDF2-SHA256, 100,000 iterations, 16byte salt）----
-// 保存形式: pbkdf2$<iter>$<salt_b64>$<hash_b64>
-// 反復回数は Cloudflare Workers の WebCrypto 上限（100,000）に合わせる。
-// verifyPassword は保存値から反復回数を読むため、将来値を変えても後方互換。
-
-const ITERATIONS = 100_000;
+// ---- パスワードハッシュ（WebCrypto PBKDF2-SHA256, 16byte salt）----
+// Cloudflare Workers の WebCrypto は deriveBits の反復回数を 100,000 までしか
+// 許可しない。OWASP 推奨（PBKDF2-SHA256 で 60万回以上）に近づけるため、
+// 100,000 回の PBKDF2 を複数段チェインして実効反復回数を引き上げる。
+// 各段は「前段の出力を次段のソルトにする」ことで直列化し、総当たり側は全段を
+// 順に計算する必要がある（＝実効 ROUNDS×PER_ROUND 回）。
+//
+// 保存形式:
+//   新: pbkdf2c$<rounds>$<perRound>$<salt_b64>$<hash_b64>   （チェイン）
+//   旧: pbkdf2$<iter>$<salt_b64>$<hash_b64>                  （単発・後方互換）
+//
+// ROUNDS は無料枠の CPU 時間制限に触れない範囲で選ぶ。既に PER_ROUND=100,000 の
+// 単発が本番で動作しているため、その 3 倍（実効 30 万回）を既定とする。
+// プランに余裕があれば ROUNDS を 6（実効 60 万回）に上げてよい。
+const PER_ROUND = 100_000;
+const ROUNDS = 3;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 
@@ -25,6 +35,7 @@ function fromBase64(b64: string): Uint8Array {
   return bytes;
 }
 
+// 単発 PBKDF2（iterations は Workers 上限の 100,000 以下であること）
 async function pbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -41,25 +52,66 @@ async function pbkdf2(password: string, salt: Uint8Array, iterations: number): P
   return new Uint8Array(bits);
 }
 
+// チェイン PBKDF2: 前段の出力を次段のソルトに使う。実効 rounds×perRound 回。
+async function pbkdf2Chain(
+  password: string,
+  salt: Uint8Array,
+  rounds: number,
+  perRound: number
+): Promise<Uint8Array> {
+  let out = await pbkdf2(password, salt, perRound);
+  for (let i = 1; i < rounds; i++) {
+    out = await pbkdf2(password, out, perRound);
+  }
+  return out;
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await pbkdf2(password, salt, ITERATIONS);
-  return `pbkdf2$${ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`;
+  const hash = await pbkdf2Chain(password, salt, ROUNDS, PER_ROUND);
+  return `pbkdf2c$${ROUNDS}$${PER_ROUND}$${toBase64(salt)}$${toBase64(hash)}`;
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$');
-  if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
-  const iterations = Number(parts[1]);
-  if (!Number.isFinite(iterations) || iterations <= 0) return false;
-  const salt = fromBase64(parts[2]);
-  const expected = fromBase64(parts[3]);
-  const actual = await pbkdf2(password, salt, iterations);
-  if (actual.length !== expected.length) return false;
-  // 定数時間比較
-  let diff = 0;
-  for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
-  return diff === 0;
+
+  // 新形式: チェイン
+  if (parts[0] === 'pbkdf2c' && parts.length === 5) {
+    const rounds = Number(parts[1]);
+    const perRound = Number(parts[2]);
+    if (!Number.isInteger(rounds) || rounds <= 0 || rounds > 64) return false;
+    if (!Number.isInteger(perRound) || perRound <= 0 || perRound > PER_ROUND) return false;
+    const salt = fromBase64(parts[3]);
+    const expected = fromBase64(parts[4]);
+    const actual = await pbkdf2Chain(password, salt, rounds, perRound);
+    return timingSafeEqual(actual, expected);
+  }
+
+  // 旧形式: 単発（既存ユーザーとの後方互換）
+  if (parts[0] === 'pbkdf2' && parts.length === 4) {
+    const iterations = Number(parts[1]);
+    if (!Number.isFinite(iterations) || iterations <= 0 || iterations > PER_ROUND) return false;
+    const salt = fromBase64(parts[1 + 1]);
+    const expected = fromBase64(parts[3]);
+    const actual = await pbkdf2(password, salt, iterations);
+    return timingSafeEqual(actual, expected);
+  }
+
+  return false;
+}
+
+// 保存済みハッシュが現行の推奨パラメータより弱いか（ログイン成功時の再ハッシュ判定用）。
+export function needsRehash(stored: string): boolean {
+  const parts = stored.split('$');
+  if (parts[0] !== 'pbkdf2c' || parts.length !== 5) return true; // 旧形式は要再ハッシュ
+  return Number(parts[1]) < ROUNDS || Number(parts[2]) < PER_ROUND;
 }
 
 // ---- public_id 生成（Crockford Base32 風・I/L/O/U を除く 10 文字）----

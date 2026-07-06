@@ -5,6 +5,7 @@ import {
   generatePublicId,
   hashPassword,
   issueToken,
+  needsRehash,
   requireAuth,
   verifyPassword,
 } from '../lib/auth';
@@ -66,6 +67,16 @@ auth.post('/login', async (c) => {
 
   const ok = await verifyPassword(password, user.password_hash);
   if (!ok) throw unauthorized('ユーザーIDまたはパスワードが違います');
+
+  // 旧い/弱いハッシュならログイン成功時に現行パラメータへ透過的に更新する
+  if (needsRehash(user.password_hash)) {
+    try {
+      const upgraded = await hashPassword(password);
+      await sb.from('users').update({ password_hash: upgraded }).eq('id', user.id);
+    } catch {
+      // 再ハッシュ失敗はログインを妨げない（次回再試行）
+    }
+  }
 
   const token = await issueToken(user.id, c.env.JWT_SECRET);
   return c.json({ user: { publicId: user.public_id, username: user.username, handle: user.handle }, token });
