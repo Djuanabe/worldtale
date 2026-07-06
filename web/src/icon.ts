@@ -73,29 +73,41 @@ export function buildWorldTaleIcon(sizePx: number): SVGSVGElement {
   }
   return svg;
 }
-// 「出会ってたかも」アイコン: すれ違いざまに袖が触れ合う2人（ドット絵・単色）。
-// 手描きラフを整えたもの。currentColor を継承し、ボタン文字色になじむ。
-const MET_W = 28;
-const MET_H = 18;
+// 「出会ってたかも」アイコン: 着物の垂れ袖(袂)が触れ合う2人（ドット絵・単色）。
+// 上部はV字に分かれ、下で袖先が触れる。currentColor を継承。
+const MET_W = 40;
+const MET_H = 30;
 const MET_ROWS: string[] = [
-  "............................",
-  "..........X......X..........",
-  ".........XXX....XXX.........",
-  ".........XXX....XXX.........",
-  "..........X......X..........",
-  ".........XXX....XXX.........",
-  "........XXXXX..XXXXX........",
-  "........XXXXX..XXXXX........",
-  "........XXXXX..XXXXX........",
-  "........XXXXX..XXXXX........",
-  ".........XXXX..XXXX.........",
-  ".........XXXXXXXXXX.........",
-  ".........X.X....X.X.........",
-  ".........X.X....X.X.........",
-  ".........X.X....X.X.........",
-  "........XX.XX..XX.XX........",
-  "........XX.XX..XX.XX........",
-  "............................",
+  "........................................",
+  "........................................",
+  "..........XXX..............XXX..........",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  "..........XXX..............XXX..........",
+  "........................................",
+  "........................................",
+  "........................................",
+  "........XXX.XXX..........XXX.XXX........",
+  ".......XXXX.XXXX........XXXX.XXXX.......",
+  ".......XXXX.XXXXX......XXXXX.XXXX.......",
+  "......XXXXXXXXXXX......XXXXXXXXXXX......",
+  "......XXX.....XXXX....XXXX.....XXX......",
+  "......XXXXXXXXXXXX....XXXXXXXXXXXX......",
+  "......XXXXXXXXXXXXX..XXXXXXXXXXXXX......",
+  ".....XXXXXXXXXXXXXX..XXXXXXXXXXXXXX.....",
+  ".....XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.....",
+  ".....XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.....",
+  ".......XXXXXXXXXXXXXXXXXXXXXXXXXX.......",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  ".........XXXXX............XXXXX.........",
+  ".........XX.XX............XX.XX.........",
+  ".........XX.XX............XX.XX.........",
+  "........................................",
+  "........................................",
 ];
 
 export function buildMetIcon(): SVGSVGElement {
@@ -113,10 +125,8 @@ export function buildMetIcon(): SVGSVGElement {
       let run = 1;
       while (x + run < MET_W && row[x + run] === "X") run++;
       const rect = document.createElementNS(ns, "rect");
-      rect.setAttribute("x", String(x));
-      rect.setAttribute("y", String(y));
-      rect.setAttribute("width", String(run));
-      rect.setAttribute("height", "1");
+      rect.setAttribute("x", String(x)); rect.setAttribute("y", String(y));
+      rect.setAttribute("width", String(run)); rect.setAttribute("height", "1");
       rect.setAttribute("fill", "currentColor");
       svg.append(rect);
       x += run;

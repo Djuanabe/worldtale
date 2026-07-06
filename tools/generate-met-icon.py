@@ -1,50 +1,56 @@
-import math, json
-W, H = 28, 18
-CENTER=(W-1)/2.0  # 13.5
+import json
+W, H = 40, 30
 
-def seg(px,py,ax,ay,bx,by,t):
-    vx,vy=bx-ax,by-ay
-    dd=vx*vx+vy*vy
-    wx,wy=px-ax,py-ay
-    tt=(wx*vx+wy*vy)/dd if dd else 0
-    tt=max(0,min(1,tt))
-    qx,qy=ax+tt*vx,ay+tt*vy
-    return (px-qx)**2+(py-qy)**2 <= t*t
+def pip(x, y, poly):
+    inside=False; n=len(poly); j=n-1
+    for i in range(n):
+        xi,yi=poly[i]; xj,yj=poly[j]
+        if (yi>y)!=(yj>y) and x < (xj-xi)*(y-yi)/(yj-yi)+xi:
+            inside=not inside
+        j=i
+    return inside
 
-def person_left(x,y):
-    cx=10.0
+def kimono_left(x, y):
+    cx=11.0
     # 頭
-    if (x-cx)**2 + (y-2.6)**2 <= 1.7**2: return True
-    if abs(x-cx)<=0.9 and 4<=y<=5: return True
-    # 胴（細め・裾すぼみ）
-    if 5<=y<=9:
-        halfw = 1.1 + (9-y)*0.2
-        if abs(x-cx) <= halfw: return True
-    # 内側の袖: 体側に沿ってほぼ垂直に垂らす → 先端だけ中央へ寄せる
-    if seg(x,y, cx+1.4,5.8, cx+1.6,10.0, 0.66): return True   # 垂直部
-    if seg(x,y, cx+1.6,10.0, 13.2,11.4, 0.6): return True     # 先端フック(中央13.5へ)
-    # 外側の袖
-    if seg(x,y, cx-1.4,5.8, cx-1.7,9.4, 0.62): return True
-    # 前脚・後脚
-    if seg(x,y, cx+0.5,10.2, cx+1.4,15.4, 0.78): return True
-    if seg(x,y, cx-0.8,10.2, cx-1.2,15.4, 0.78): return True
-    if seg(x,y, cx+1.2,15.2, cx+2.3,15.5, 0.6): return True
-    if seg(x,y, cx-1.1,15.2, cx-2.1,15.5, 0.6): return True
+    if (x-cx)**2 + (y-4.3)**2 <= 2.7**2: return True
+    # 首
+    if abs(x-cx)<=1.0 and 7<=y<=8: return True
+    # 胴(スリムなAライン)
+    if 8<=y<=25:
+        hw=1.8+(y-8)*(2.6-1.8)/17.0
+        if abs(x-cx)<=hw: return True
+    # 内袖(袂): 肩から垂れ、内edgeが下で中央へ寄る三角。先端だけ触れる
+    inner=[(12.6,10.0),(15.6,11.5),(20.7,21.6),(13.0,22.0)]
+    if pip(x,y,inner): return True
+    # 外袖(袂): 外側に垂れる(先は自由)
+    outer=[(9.4,10.0),(6.4,11.5),(4.2,20.5),(9.0,21.5)]
+    if pip(x,y,outer): return True
+    # 足(草履)
+    if 26<=y<=27 and (abs(x-(cx-1.3))<=1.0 or abs(x-(cx+1.3))<=1.0): return True
     return False
 
-def val(x,y):
-    return person_left(x,y) or person_left(W-1-x,y)
+def carve_left(x,y):
+    cx=11.0
+    # 襟V
+    if 8<=y<=13 and abs(x-cx)<=(13-y)*0.4: return True
+    # 帯線
+    if y==15 and abs(x-cx)<=(1.8+(y-8)*(2.6-1.8)/17.0): return True
+    return False
+
+def cell(x,y):
+    L=kimono_left(x,y) and not carve_left(x,y)
+    R=kimono_left(W-1-x,y) and not carve_left(W-1-x,y)
+    return L or R
 
 grid=[['.' for _ in range(W)] for _ in range(H)]
 for y in range(H):
     for x in range(W):
-        if val(x,y): grid[y][x]='X'
+        if cell(x,y): grid[y][x]='X'
 for row in grid:
     print(''.join('#' if c=='X' else ' ' for c in row))
 print("symmetric:", all(grid[y][x]==grid[y][W-1-x] for y in range(H) for x in range(W)))
-# 接触は先端(y>=10)の1〜2行のみであるべき。上部(y5-9)の中央が空いているか確認
-mid=range(12,16)
-open_top = all(any(grid[y][x]=='.' for x in mid) for y in range(5,10))
-touch_bottom = any(all(grid[y][x]=='X' for x in range(13,15)) for y in range(10,13))
-print("upper center open:", open_top, "/ tips touch near bottom:", touch_bottom)
+# 上部の袖間にV字の空きがあるか(=2枚に見える), 触れるのは下だけか
+open_mid = all(any(grid[y][x]=='.' for x in range(18,22)) for y in range(11,18))
+print("upper V gap between sleeves:", open_mid)
 open("met_grid.json","w").write(json.dumps([''.join(r) for r in grid]))

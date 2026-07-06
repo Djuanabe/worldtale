@@ -1683,9 +1683,9 @@ a.paper-entry:hover {
 
 /* 「出会ってたかも」アイコン: 文字と同じ高さで単色。ボタン/統計の文字色を継承 */
 .met-icon {
-  height: 1.15em;
+  height: 1.5em;
   width: auto;
-  vertical-align: -0.2em;
+  vertical-align: -0.45em;
   image-rendering: pixelated;
 }
 
