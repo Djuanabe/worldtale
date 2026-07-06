@@ -1698,3 +1698,88 @@ a.paper-entry:hover {
   align-items: center;
   gap: 0.1em;
 }
+
+/* ---- ホーム(地図)をスクロールなしで画面に収める ---- */
+
+body.home-route #app {
+  max-width: none;
+  padding: 8px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.home-route .jp-map-wrap {
+  padding: 0;
+  gap: 0;
+  flex: 1;
+  justify-content: flex-start;
+}
+
+/* 地図フレームは JS が縦横比を保ってサイズを付与する（max-width 等は無効化） */
+body.home-route .jp-map-frame {
+  max-width: none;
+  aspect-ratio: auto;
+}
+
+/* 左上の海に重ねる操作パネル */
+.map-overlay-panel {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  max-width: 46%;
+}
+
+.map-overlay-panel.zoomed {
+  top: 42px; /* ズーム中は「◀ 日本全体」ボタンの下に */
+}
+
+.map-filters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.map-overlay-panel select {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  max-width: 100%;
+}
+
+/* 凡例: 小さなメッセージウィンドウ風チップ */
+.map-overlay-panel .map-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--c-win);
+  color: var(--c-win-text);
+  border: 2px solid var(--c-win-text);
+  padding: 2px 6px;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.map-overlay-panel .legend-swatch {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+/* ホバー情報: 中身が無いときは隠す */
+.map-overlay-panel .map-msg {
+  min-height: 0;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  max-width: 100%;
+}
+
+.map-overlay-panel .map-msg:empty {
+  display: none;
+}

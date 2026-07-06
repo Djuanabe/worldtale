@@ -87,25 +87,8 @@ export async function renderHome(
   const currentYear = new Date().getFullYear();
   const initialYear = query.get("year") ?? "";
 
-  container.append(
-    el("div", { class: "concept" }, [
-      el("p", { class: "concept-text" }, ["世界はたくさんの物語でできている"]),
-      el("p", { class: "hint" }, [
-        "都道府県をえらぶと、そこに残された物語を読むことができます。"
-      ])
-    ])
-  );
-
-  const controls = el("div", { class: "map-controls" });
-  const yearSelect = el("select", { "aria-label": "年で絞り込む" }) as HTMLSelectElement;
-  yearSelect.append(el("option", { value: "" }, ["すべての年"]));
-  for (const y of yearOptions(currentYear - 60)) {
-    const opt = el("option", { value: String(y) }, [`${y}年`]) as HTMLOptionElement;
-    if (String(y) === initialYear) opt.selected = true;
-    yearSelect.append(opt);
-  }
-  controls.append(yearSelect);
-  container.append(controls);
+  // ホーム(地図)はスクロールなしで画面に収める。#app の余白を詰める。
+  document.body.classList.add("home-route");
 
   const mapHost = el("div", { class: "jp-map-wrap" });
   container.append(mapHost);
@@ -123,10 +106,9 @@ export async function renderHome(
     width: String(JAPAN_MAP_W),
     height: String(JAPAN_MAP_H),
     role: "img",
-    "aria-label": "日本地図。都道府県ごとの物語数を色の濃淡で表す"
+    "aria-label": "日本地図。地方をえらぶ"
   }) as HTMLCanvasElement;
   // ズームレイヤー: canvas 2枚をまとめ、地方ズーム時にこれへ transform をかける
-  // （カプセル入口や戻るボタンはこの外に置くのでズームの影響を受けない）
   const zoomLayer = el("div", { class: "jp-map-zoom" });
   zoomLayer.append(baseCanvas, hiCanvas);
   mapFrame.append(zoomLayer);
@@ -139,6 +121,35 @@ export async function renderHome(
   ) as HTMLButtonElement;
   backBtn.style.display = "none";
   mapFrame.append(backBtn);
+
+  // ---- 左上の海に重ねる操作パネル（年フィルタ・県プルダウン・凡例・ホバー情報） ----
+  const yearSelect = el("select", { "aria-label": "年で絞り込む" }) as HTMLSelectElement;
+  yearSelect.append(el("option", { value: "" }, ["すべての年"]));
+  for (const y of yearOptions(currentYear - 60)) {
+    const opt = el("option", { value: String(y) }, [`${y}年`]) as HTMLOptionElement;
+    if (String(y) === initialYear) opt.selected = true;
+    yearSelect.append(opt);
+  }
+
+  const prefSelect = el("select", { "aria-label": "都道府県をえらぶ" }) as HTMLSelectElement;
+  prefSelect.append(el("option", { value: "" }, ["都道府県をえらぶ"]));
+  for (const p of PREFECTURES) {
+    prefSelect.append(el("option", { value: String(p.code) }, [p.name]));
+  }
+
+  const legend = el("div", { class: "map-legend" }, [
+    el("span", { class: "legend-swatch", style: "background:#a8c890" }),
+    "少ない",
+    el("span", { class: "legend-swatch", style: "background:#4a7a3a" }),
+    "多い"
+  ]);
+
+  const msgBox = el("div", { class: "map-msg", "aria-live": "polite" });
+
+  // フィルタ群（年・県・凡例）は地方ズーム中は隠す。msgBox は常時表示。
+  const filtersGroup = el("div", { class: "map-filters" }, [yearSelect, prefSelect, legend]);
+  const controlsPanel = el("div", { class: "map-overlay-panel" }, [filtersGroup, msgBox]);
+  mapFrame.append(controlsPanel);
 
   // ---- タイムカプセルの入口: 地図右下の空いた海域にドット絵カプセルを重ねる ----
   const capsuleEntryWrap = el("div", { class: "capsule-entry-wrap" });
@@ -164,27 +175,25 @@ export async function renderHome(
 
   mapHost.append(mapFrame);
 
-  const msgBox = el("div", { class: "map-msg", "aria-live": "polite" });
-  mapHost.append(msgBox);
-
-  const legend = el("div", { class: "map-legend" }, [
-    el("span", { class: "legend-swatch", style: "background:#a8c890" }),
-    "少ない",
-    el("span", { class: "legend-swatch", style: "background:#4a7a3a" }),
-    "多い"
-  ]);
-  mapHost.append(legend);
-
-  // ---- アクセシビリティ用: 都道府県プルダウン ----
-  const a11yRow = el("div", { class: "map-select-row" });
-  const prefSelect = el("select", { "aria-label": "都道府県をえらぶ" }) as HTMLSelectElement;
-  prefSelect.append(el("option", { value: "" }, ["都道府県をえらぶ"]));
-  for (const p of PREFECTURES) {
-    prefSelect.append(el("option", { value: String(p.code) }, [p.name]));
+  // ---- 地図を画面に収まるサイズに調整（縦横比を保ちつつビューポート内に） ----
+  function fitMap(): void {
+    const top = mapHost.getBoundingClientRect().top;
+    const footer = document.getElementById("footer");
+    let footerH = 0;
+    if (footer) {
+      const fs = getComputedStyle(footer);
+      footerH = footer.offsetHeight + parseFloat(fs.marginTop || "0") + parseFloat(fs.marginBottom || "0");
+    }
+    const avail = window.innerHeight - top - footerH - 12;
+    const byHeight = avail * (JAPAN_MAP_W / JAPAN_MAP_H);
+    const byWidth = mapHost.clientWidth - 2;
+    const w = Math.max(220, Math.min(byHeight, byWidth));
+    mapFrame.style.width = `${Math.round(w)}px`;
+    mapFrame.style.height = `${Math.round(w * (JAPAN_MAP_H / JAPAN_MAP_W))}px`;
   }
-  const goBtn = el("button", { class: "btn", type: "button" }, ["この都道府県へ"]) as HTMLButtonElement;
-  a11yRow.append(prefSelect, goBtn);
-  mapHost.append(a11yRow);
+  const onResize = () => fitMap();
+  window.addEventListener("resize", onResize);
+  fitMap();
 
   let counts: Record<string, number> = {};
   let max = 0;
@@ -194,7 +203,8 @@ export async function renderHome(
     navigate(y ? `/p/${code}?year=${y}` : `/p/${code}`);
   }
 
-  goBtn.addEventListener("click", () => {
+  // 県プルダウンは選択即遷移（ボタンなしで省スペース）
+  prefSelect.addEventListener("change", () => {
     const code = Number(prefSelect.value);
     if (code) goToPref(code);
   });
@@ -288,6 +298,8 @@ export async function renderHome(
     clearHighlight();
     backBtn.style.display = "";
     capsuleEntryWrap.style.display = "none"; // ズーム中は入口を隠す
+    filtersGroup.style.display = "none"; // ズーム中はフィルタを隠し、戻るボタンと干渉させない
+    controlsPanel.classList.add("zoomed");
     msgBox.textContent = `${region.name}地方 — 都道府県をえらぶ`;
     hiCanvas.setAttribute("aria-label", `${region.name}地方。都道府県をえらぶ`);
   }
@@ -299,6 +311,8 @@ export async function renderHome(
     clearHighlight();
     backBtn.style.display = "none";
     capsuleEntryWrap.style.display = "";
+    filtersGroup.style.display = "";
+    controlsPanel.classList.remove("zoomed");
     msgBox.textContent = "";
     hiCanvas.setAttribute("aria-label", "日本地図。地方をえらぶ");
   }
@@ -367,10 +381,13 @@ export async function renderHome(
   mapHost.insertBefore(loading, mapFrame);
   await loadAndDraw(initialYear);
   loading.remove();
+  fitMap(); // 読み込み後にレイアウトが確定するので再調整
 
   return () => {
     hiCanvas.removeEventListener("pointermove", onPointerMove);
     hiCanvas.removeEventListener("pointerleave", onPointerLeave);
     hiCanvas.removeEventListener("click", onClick);
+    window.removeEventListener("resize", onResize);
+    document.body.classList.remove("home-route");
   };
 }
