@@ -48,7 +48,7 @@ export function buildViewerShareRow(prefName: string, storyId: string): HTMLElem
             void navigator.share({ text, url }).catch(() => {});
           }
         },
-        ["この端末で共有"]
+        ["他のアプリで共有"]
       )
     );
   }
@@ -81,7 +81,7 @@ export function buildQuietShareRow(): HTMLElement {
             void navigator.share({ text: QUIET_TEXT, url: anonUrl }).catch(() => {});
           }
         },
-        ["この端末でそっと共有"]
+        ["他のアプリで共有"]
       )
     );
   }
@@ -117,13 +117,19 @@ export function buildAuthorShareRow(title: string, storyId: string): HTMLElement
             void navigator.share({ text: asAuthorText, url: asAuthorUrl }).catch(() => {});
           }
         },
-        ["この端末で共有"]
+        ["他のアプリで共有"]
       )
     );
   }
+  // 「そっと共有」は X リンク（a）のみ取り込む。
+  // ネイティブ共有ボタン（button）は上の「他のアプリで共有」と重複しラベルが紛らわしいため除く。
   const quiet = buildQuietShareRow();
-  quiet.querySelectorAll(".btn").forEach((b) => b.classList.add("btn-small"));
-  for (const child of Array.from(quiet.children)) shareRow.append(child);
+  for (const child of Array.from(quiet.children)) {
+    if (child.tagName === "A") {
+      child.classList.add("btn-small");
+      shareRow.append(child);
+    }
+  }
   return shareRow;
 }
 
