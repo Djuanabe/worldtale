@@ -3,10 +3,12 @@ import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../types';
 import { unauthorized } from './errors';
 
-// ---- パスワードハッシュ（WebCrypto PBKDF2-SHA256, 210,000 iterations, 16byte salt）----
+// ---- パスワードハッシュ（WebCrypto PBKDF2-SHA256, 100,000 iterations, 16byte salt）----
 // 保存形式: pbkdf2$<iter>$<salt_b64>$<hash_b64>
+// 反復回数は Cloudflare Workers の WebCrypto 上限（100,000）に合わせる。
+// verifyPassword は保存値から反復回数を読むため、将来値を変えても後方互換。
 
-const ITERATIONS = 210_000;
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 
