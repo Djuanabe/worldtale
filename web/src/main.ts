@@ -12,6 +12,7 @@ import { renderEditPage } from "./pages/edit";
 import { renderLoginPage } from "./pages/login";
 import { renderRegisterPage } from "./pages/register";
 import { renderMePage } from "./pages/me";
+import { initTutorial } from "./tutorial";
 
 addRoute("/", renderHome);
 addRoute("/p/:pref", renderPrefPage);
@@ -37,3 +38,5 @@ const appRoot = document.getElementById("app");
 if (appRoot) {
   initRouter(appRoot);
 }
+
+initTutorial();

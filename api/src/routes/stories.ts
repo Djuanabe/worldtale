@@ -9,6 +9,19 @@ import { countReactionsFor, summarizeReactions } from '../lib/reactions';
 
 export const stories = new Hono<Env>();
 
+// 時系列（年→季節→投稿日時）で古い順に並べる比較。season 無しの旧データは年内末尾。
+const SEASON_ORDER: Record<string, number> = { spring: 0, summer: 1, autumn: 2, winter: 3 };
+function compareChrono(
+  a: { year: number; season: string | null; created_at: string },
+  b: { year: number; season: string | null; created_at: string }
+): number {
+  if (a.year !== b.year) return a.year - b.year;
+  const sa = a.season ? SEASON_ORDER[a.season] ?? 4 : 4;
+  const sb = b.season ? SEASON_ORDER[b.season] ?? 4 : 4;
+  if (sa !== sb) return sa - sb;
+  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+}
+
 // ---- GET /api/stories （一覧・公開）----
 stories.get('/', async (c) => {
   const sb = getSupabase(c.env);
@@ -183,6 +196,36 @@ stories.get('/:id/reactions', async (c) => {
 
   const summary = await summarizeReactions(sb, id, anonToken || undefined);
   return c.json(summary);
+});
+
+// ---- GET /api/stories/:id/adjacent （同じ都道府県の時系列で前後の物語）----
+stories.get('/:id/adjacent', async (c) => {
+  const id = c.req.param('id');
+  const sb = getSupabase(c.env);
+
+  const { data: cur, error } = await sb
+    .from('stories')
+    .select('id, prefecture, is_hidden')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!cur || (cur as any).is_hidden) throw notFound('物語が見つかりません');
+
+  const { data: rows, error: lErr } = await sb
+    .from('stories')
+    .select('id, title, year, season, created_at, user:users!inner(username, handle)')
+    .eq('prefecture', (cur as any).prefecture)
+    .eq('is_hidden', false);
+  if (lErr) throw lErr;
+
+  const list = (rows ?? []).slice().sort((a: any, b: any) => compareChrono(a, b));
+  const i = list.findIndex((r: any) => r.id === id);
+  const toRef = (r: any) =>
+    r ? { id: r.id, title: r.title, username: r.user?.username ?? '', userHandle: r.user?.handle ?? '' } : null;
+  const prev = i > 0 ? toRef(list[i - 1]) : null;
+  const next = i >= 0 && i < list.length - 1 ? toRef(list[i + 1]) : null;
+
+  return c.json({ prev, next });
 });
 
 // ---- GET /api/stories/:id （本文込み・公開／views をインクリメント）----

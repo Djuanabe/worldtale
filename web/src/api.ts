@@ -264,8 +264,37 @@ export function getReactions(id: string): Promise<ReactionResult> {
 
 // ---- ユーザー ----
 
-export function getUser(handle: string): Promise<{ handle: string; username: string; storyCount: number }> {
+export interface UserProfile {
+  handle: string;
+  username: string;
+  storyCount: number;
+  isSelf: boolean;
+  isFollowing: boolean | null; // 本人・未ログインは null
+}
+
+export function getUser(handle: string): Promise<UserProfile> {
   return request(`/api/users/${encodeURIComponent(handle)}`);
+}
+
+export function toggleFollow(handle: string): Promise<{ isFollowing: boolean }> {
+  return request(`/api/users/${encodeURIComponent(handle)}/follow`, { method: "POST" });
+}
+
+export function followStats(): Promise<{ followingCount: number; followerCount: number }> {
+  return request("/api/my/follow-stats");
+}
+
+// ---- 前後の物語（同じ都道府県の時系列） ----
+
+export interface StoryRef {
+  id: string;
+  title: string;
+  username: string;
+  userHandle: string;
+}
+
+export function getAdjacentStories(id: string): Promise<{ prev: StoryRef | null; next: StoryRef | null }> {
+  return request(`/api/stories/${encodeURIComponent(id)}/adjacent`);
 }
 
 // ---- 写真 ----

@@ -51,6 +51,8 @@ const photos = [
 
 // reactions: key = `${storyId}|${type}|${anonToken}`
 const reactions = new Set();
+// follows: key = `${followerId}|${followingId}`（見守る）。デモ用に u1 は2人に見守られている。
+const follows = new Set(["u2|u1", "u3|u1"]);
 const reports = [];
 const tokens = new Map(); // token -> userId
 // アップロードされた画像の実データ（メモリ保持。再起動で消える）
@@ -238,6 +240,17 @@ const server = http.createServer(async (req, res) => {
       if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
       return json(res, 200, { photos: photos.filter((p) => p.userId === u.id).map((p) => photoJson(p, origin)) });
     }
+    if (path === "/api/my/follow-stats") {
+      const u = authUser(req);
+      if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
+      let followingCount = 0, followerCount = 0;
+      for (const k of follows) {
+        const [f, t] = k.split("|");
+        if (f === u.id) followingCount++;
+        if (t === u.id) followerCount++;
+      }
+      return json(res, 200, { followingCount, followerCount });
+    }
 
     // ---- map ----
     if (path === "/api/map/summary") {
@@ -295,13 +308,33 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---- users ----
+    const followMatch = path.match(/^\/api\/users\/([\w]+)\/follow$/);
+    if (followMatch && req.method === "POST") {
+      const u = authUser(req);
+      if (!u) return err(res, 401, "UNAUTHORIZED", "ログインが必要です");
+      const target = users.find((x) => x.handle === followMatch[1]);
+      if (!target) return err(res, 404, "NOT_FOUND", "ユーザーが見つかりません");
+      if (target.id === u.id) return err(res, 400, "VALIDATION", "自分自身は見守れません");
+      const k = `${u.id}|${target.id}`;
+      let isFollowing;
+      if (follows.has(k)) { follows.delete(k); isFollowing = false; }
+      else { follows.add(k); isFollowing = true; }
+      return json(res, 200, { isFollowing });
+    }
     const userMatch = path.match(/^\/api\/users\/([\w]+)$/);
     if (userMatch) {
       const u = users.find((x) => x.handle === userMatch[1]);
       if (!u) return err(res, 404, "NOT_FOUND", "ユーザーが見つかりません");
+      const viewer = authUser(req);
+      let isSelf = false, isFollowing = null;
+      if (viewer) {
+        isSelf = viewer.id === u.id;
+        if (!isSelf) isFollowing = follows.has(`${viewer.id}|${u.id}`);
+      }
       return json(res, 200, {
         handle: u.handle, username: u.username,
         storyCount: stories.filter((s) => s.userId === u.id).length,
+        isSelf, isFollowing,
       });
     }
 
@@ -368,6 +401,26 @@ const server = http.createServer(async (req, res) => {
       if (!s) return err(res, 404, "NOT_FOUND", "物語が見つかりません");
       if (s.userId !== u.id) return err(res, 403, "FORBIDDEN", "権限がありません");
       return json(res, 200, { views: s.views, ...counts(s.id) });
+    }
+
+    const adjMatch = path.match(/^\/api\/stories\/([\w-]+)\/adjacent$/);
+    if (adjMatch) {
+      const cur = stories.find((x) => x.id === adjMatch[1]);
+      if (!cur) return err(res, 404, "NOT_FOUND", "物語が見つかりません");
+      const SEASON_ORDER = { spring: 0, summer: 1, autumn: 2, winter: 3 };
+      const key = (s) => [s.year, s.season ? SEASON_ORDER[s.season] ?? 4 : 4, new Date(s.createdAt).getTime()];
+      const cmp = (a, b) => { const ka = key(a), kb = key(b); return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2]; };
+      const list = stories.filter((s) => s.prefecture === cur.prefecture).sort(cmp);
+      const i = list.findIndex((s) => s.id === cur.id);
+      const toRef = (s) => {
+        if (!s) return null;
+        const u = users.find((x) => x.id === s.userId);
+        return { id: s.id, title: s.title, username: u?.username ?? "", userHandle: u?.handle ?? "" };
+      };
+      return json(res, 200, {
+        prev: i > 0 ? toRef(list[i - 1]) : null,
+        next: (i >= 0 && i < list.length - 1) ? toRef(list[i + 1]) : null,
+      });
     }
 
     const storyMatch = path.match(/^\/api\/stories\/([\w-]+)$/);

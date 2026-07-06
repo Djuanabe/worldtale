@@ -1783,3 +1783,116 @@ body.home-route .jp-map-frame {
 .map-overlay-panel .map-msg:empty {
   display: none;
 }
+
+/* ==== 前後の物語ナビ（そのまえ／そのご） ==== */
+.adjacent-wrap {
+  margin: 20px 0 8px;
+}
+.adjacent-label {
+  font-size: 0.8rem;
+  color: var(--c-dim-text);
+  margin: 0 0 6px;
+  text-align: center;
+}
+.adjacent-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.adjacent-nav .adj-btn {
+  flex: 1;
+  font-size: 0.85rem;
+}
+.adjacent-nav .adj-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* 読書モード内では枠内に馴染ませる */
+.reader-actions .adjacent-nav {
+  margin: 10px 0;
+}
+
+/* ==== 見守る（フォロー） ==== */
+.watch-row {
+  margin-top: 12px;
+}
+.watch-btn {
+  font-size: 0.9rem;
+}
+.watch-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--c-win-text);
+  font-size: 0.9rem;
+  margin: 4px 0 20px;
+}
+.watch-stat {
+  background: var(--c-win);
+  border: 2px solid var(--c-win-text);
+  padding: 4px 10px;
+}
+.watch-stat-sep {
+  color: var(--c-dim-text);
+}
+
+/* ==== チュートリアル（未ログイン時の誘導） ==== */
+.tutorial-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9000; /* 読書オーバーレイより前面 */
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  pointer-events: none; /* 背後の地図を操作できるよう、枠自体は透過 */
+}
+.tut-window {
+  pointer-events: auto;
+  width: min(560px, 100%);
+  background: var(--c-win);
+  color: var(--c-win-text);
+  border: 3px solid var(--c-win-text);
+  box-shadow: 0 0 0 3px var(--c-win), 0 0 0 5px var(--c-win-text);
+  padding: 12px 14px;
+  font-family: var(--font-dot);
+}
+.tut-speaker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--c-gold);
+  margin-bottom: 6px;
+}
+.tut-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.tut-hint {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--c-green);
+}
+.tut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tut-actions .tut-btn,
+.tut-actions .tut-primary {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+}
+.tut-actions .tut-primary {
+  background: var(--c-gold);
+  color: var(--c-bg);
+  border-color: var(--c-win-text);
+}
+.tut-skip {
+  margin-left: auto; /* スキップは右端に寄せる */
+}

@@ -35,7 +35,9 @@ API はカスタムドメインを付けず、Cloudflare 既定の `*.workers.de
    - `0002_season_municipality.sql`
    - `0003_story_slot_unique.sql`
    - `0004_public_handle.sql`
-   （4つを続けて貼り付けて一度に実行してもよい）
+   - `0005_follows.sql`（見守る／フォロー機能）
+   （続けて貼り付けて一度に実行してもよい。既に 0001〜0004 を適用済みなら
+   `0005_follows.sql` だけ追加で実行すればよい）
 3. **Storage** → **New bucket** で以下を作成:
    - 名前: `photos`
    - **Public bucket: ON**（公開読み取り）

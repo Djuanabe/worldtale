@@ -1,6 +1,7 @@
-import { ApiRequestError, StorySummary, getUser, listStories } from "../api";
+import { ApiRequestError, StorySummary, UserProfile, getUser, listStories, toggleFollow } from "../api";
 import { compareChronological, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode } from "../ui";
+import { navigate } from "../router";
 
 export async function renderUserPage(
   params: Record<string, string>,
@@ -20,7 +21,8 @@ export async function renderUserPage(
     container.append(
       el("div", { class: "card" }, [
         el("h1", { class: "page-title", style: "border-bottom:none" }, [user.username]),
-        el("p", { class: "hint" }, [`物語 ${user.storyCount}件 ・ 古い順にたどれます`])
+        el("p", { class: "hint" }, [`物語 ${user.storyCount}件 ・ 古い順にたどれます`]),
+        buildWatchButton(user)
       ])
     );
 
@@ -46,6 +48,41 @@ export async function renderUserPage(
       container.append(errorNode("読み込みに失敗しました。"));
     }
   }
+}
+
+// 「見守る」ボタン。本人には出さない。未ログインならログインへ誘導。
+// フォロー/フォロワー数は本人のみ（マイページ）で確認できるので、ここには出さない。
+function buildWatchButton(user: UserProfile): HTMLElement {
+  if (user.isSelf) return el("span", {});
+
+  const notLoggedIn = user.isFollowing === null; // 本人でなく null＝未ログイン
+  let following = user.isFollowing === true;
+
+  const btn = el("button", { class: "btn watch-btn" }, []) as HTMLButtonElement;
+  const paint = () => {
+    btn.textContent = following ? "見守り中（やめる）" : "見守る";
+    btn.classList.toggle("btn-outline", following);
+  };
+  paint();
+
+  btn.addEventListener("click", async () => {
+    if (notLoggedIn) {
+      navigate("/login");
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const res = await toggleFollow(user.handle);
+      following = res.isFollowing;
+      paint();
+    } catch {
+      window.alert("見守る操作に失敗しました。時間をおいてお試しください。");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  return el("div", { class: "watch-row" }, [btn]);
 }
 
 function buildPaperEntry(s: StorySummary): HTMLElement {

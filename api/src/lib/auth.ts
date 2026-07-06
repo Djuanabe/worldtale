@@ -95,3 +95,19 @@ export const requireAuth: MiddlewareHandler<Env> = async (c, next) => {
   }
   await next();
 };
+
+// ---- 任意認証: トークンがあれば userId を設定、無ければ素通り（拒否しない）----
+export const optionalAuth: MiddlewareHandler<Env> = async (c, next) => {
+  const header = c.req.header('Authorization');
+  if (header && header.startsWith('Bearer ')) {
+    const token = header.slice(7).trim();
+    try {
+      const payload = await verify(token, c.env.JWT_SECRET, 'HS256');
+      const sub = payload.sub;
+      if (typeof sub === 'string' && sub) c.set('userId', sub);
+    } catch {
+      // 無効トークンは無視して未ログイン扱い
+    }
+  }
+  await next();
+};

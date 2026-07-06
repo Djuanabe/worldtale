@@ -3,6 +3,7 @@ import {
   StoryDetail,
   deleteStory,
   fetchMe,
+  getAdjacentStories,
   getReactions,
   getStory,
   isLoggedIn,
@@ -134,6 +135,39 @@ export function buildAuthorShareRow(title: string, storyId: string): HTMLElement
   return shareRow;
 }
 
+// 同じ都道府県の時系列で「そのまえ／そのご」の物語へ移動するナビ。
+// prev/next は非同期で埋め、無ければ端であることを示す。
+export function buildAdjacentNav(storyId: string, onNavigate: (id: string) => void): HTMLElement {
+  const prevBtn = el("button", { class: "btn btn-outline adj-btn", disabled: "true" }, [
+    "← そのまえ"
+  ]) as HTMLButtonElement;
+  const nextBtn = el("button", { class: "btn btn-outline adj-btn", disabled: "true" }, [
+    "そのご →"
+  ]) as HTMLButtonElement;
+  const nav = el("div", { class: "adjacent-nav" }, [prevBtn, nextBtn]);
+
+  void getAdjacentStories(storyId)
+    .then(({ prev, next }) => {
+      if (prev) {
+        prevBtn.disabled = false;
+        prevBtn.title = prev.title;
+        prevBtn.addEventListener("click", () => onNavigate(prev.id));
+      } else {
+        prevBtn.textContent = "← ここが最初の物語";
+      }
+      if (next) {
+        nextBtn.disabled = false;
+        nextBtn.title = next.title;
+        nextBtn.addEventListener("click", () => onNavigate(next.id));
+      } else {
+        nextBtn.textContent = "最後の物語 →";
+      }
+    })
+    .catch(() => {});
+
+  return nav;
+}
+
 export async function renderStoryPage(
   params: Record<string, string>,
   _query: URLSearchParams,
@@ -225,6 +259,14 @@ export async function renderStoryPage(
   bindReaction(metBtn, "met");
   reactionRow.append(likeBtn, metBtn);
   container.append(reactionRow);
+
+  // ---- 前後の物語（同じ都道府県の時系列） ----
+  container.append(
+    el("div", { class: "adjacent-wrap" }, [
+      el("p", { class: "adjacent-label" }, [`${PREF_BY_CODE[story.prefecture]?.name ?? "この場所"}の時をたどる`]),
+      buildAdjacentNav(story.id, (nextId) => navigate(`/story/${nextId}`))
+    ])
+  );
 
   // ---- 共有（閲覧側: 「〜県でこんな物語を見つけました。」+ 物語リンク） ----
   container.append(buildViewerShareRow(PREF_BY_CODE[story.prefecture]?.name ?? "", story.id));

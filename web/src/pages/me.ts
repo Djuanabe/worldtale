@@ -1,4 +1,4 @@
-import { MyStory, Photo, deletePhoto, isLoggedIn, myPhotos, myStories } from "../api";
+import { MyStory, Photo, deletePhoto, followStats, isLoggedIn, myPhotos, myStories } from "../api";
 import { compareChronological, prefName, seasonLabel, storyMetaText } from "../prefectures";
 import { el, errorNode, loadingNode, pageTitle } from "../ui";
 import { navigate } from "../router";
@@ -16,6 +16,22 @@ export async function renderMePage(
   }
 
   container.append(pageTitle("マイページ"));
+
+  // 見守り数（本人のみ表示）
+  const watchStats = el("p", { class: "watch-stats" }, [loadingNode("　")]);
+  container.append(watchStats);
+  void followStats()
+    .then((s) => {
+      watchStats.innerHTML = "";
+      watchStats.append(
+        el("span", { class: "watch-stat" }, [`${s.followingCount}人を見守り中`]),
+        el("span", { class: "watch-stat-sep" }, ["・"]),
+        el("span", { class: "watch-stat" }, [`${s.followerCount}人に見守られ中`])
+      );
+    })
+    .catch(() => {
+      watchStats.remove();
+    });
 
   const storySection = el("section", {}, [
     el("h2", {}, ["投稿した物語"]),

@@ -62,3 +62,25 @@ my.get('/photos', requireAuth, async (c) => {
 
   return c.json({ photos: list });
 });
+
+// ---- GET /api/my/follow-stats （見守り数・本人のみ）----
+my.get('/follow-stats', requireAuth, async (c) => {
+  const sb = getSupabase(c.env);
+  const userId = c.get('userId');
+
+  // 見守り中（自分がフォローしている人数）
+  const { count: following, error: e1 } = await sb
+    .from('follows')
+    .select('following_id', { count: 'exact', head: true })
+    .eq('follower_id', userId);
+  if (e1) throw e1;
+
+  // 見守られ中（自分をフォローしている人数）
+  const { count: followers, error: e2 } = await sb
+    .from('follows')
+    .select('follower_id', { count: 'exact', head: true })
+    .eq('following_id', userId);
+  if (e2) throw e2;
+
+  return c.json({ followingCount: following ?? 0, followerCount: followers ?? 0 });
+});

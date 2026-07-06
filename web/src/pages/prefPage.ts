@@ -12,7 +12,7 @@ import { PREF_BY_CODE, storyMetaText } from "../prefectures";
 import { el, errorNode, yearOptions } from "../ui";
 import { navigate } from "../router";
 import type { CleanupFn } from "../router";
-import { buildViewerShareRow, openReportModal } from "./story";
+import { buildAdjacentNav, buildViewerShareRow, openReportModal } from "./story";
 import { buildMetIcon } from "../icon";
 
 // ---- シーン定数 ----
@@ -993,6 +993,9 @@ export async function renderPrefPage(
     overlay.append(bg, dim, paper, closeBtn, stage);
     document.body.append(overlay);
 
+    // チュートリアル用: 人をクリックして物語を開いた合図
+    document.dispatchEvent(new CustomEvent("wt:reader-open"));
+
     // ---- 写真ライトボックス（サムネイルクリックで拡大表示） ----
     function openLightbox(url: string, alt: string): void {
       if (readerLightboxEl) return;
@@ -1179,8 +1182,14 @@ export async function renderPrefPage(
         ["この物語を報告する"]
       );
 
+      // そのまえ／そのご: 同じ都道府県の時系列で前後の物語を、この読書モードのまま切り替える
+      const adjNav = buildAdjacentNav(s.id, (nextId) => {
+        navigate(`/p/${prefCode}${yearQS(nextId)}`, true);
+      });
+
       actions.append(
         el("div", { class: "reaction-row" }, [likeBtn, metBtn]),
+        adjNav,
         buildViewerShareRow(PREF_BY_CODE[s.prefecture]?.name ?? "", s.id), // 「〜県でこんな物語を見つけました。」
         el("p", {}, [
           el("a", { href: `/story/${s.id}`, "data-link": true, class: "reader-bookmark" }, [

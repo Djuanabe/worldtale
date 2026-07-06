@@ -74,8 +74,8 @@ function showIdReveal(container: HTMLElement, publicId: string, username: string
   const confirmCheckbox = el("input", { type: "checkbox" }) as HTMLInputElement;
   const continueBtn = el(
     "button",
-    { class: "btn", disabled: true, onclick: () => navigate("/me") },
-    ["わかりました。はじめる"]
+    { class: "btn", disabled: true, onclick: () => navigate("/write") },
+    ["さっそく物語を書く"]
   ) as HTMLButtonElement;
 
   confirmCheckbox.addEventListener("change", () => {
