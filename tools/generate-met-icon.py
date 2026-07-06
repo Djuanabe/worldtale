@@ -1,5 +1,5 @@
 import json
-W, H = 44, 32
+W, H = 44, 34
 def pip(x,y,poly):
     inside=False;n=len(poly);j=n-1
     for i in range(n):
@@ -13,9 +13,7 @@ def seg(px,py,ax,ay,bx,by,t):
     qx,qy=ax+tt*vx,ay+tt*vy
     return (px-qx)**2+(py-qy)**2<=t*t
 
-# 左の袖(菱形)。外側の角 L を画面外(x<0)へ出し、外側から袖が伸びて見えるように。
-# 右corner R は中央で接する。
-T=(11,6.0); R=(21.6,17); B=(11,28.0); L=(-5.0,17); C=(9.5,17)
+T=(11,5.0); R=(21.6,15.5); B=(11,26.0); L=(-5.0,15.5)
 def cham(pts,f=0.12):
     poly=[]
     for i,p in enumerate(pts):
@@ -27,7 +25,6 @@ POLY=cham([T,R,B,L])
 def filled_left(x,y): return pip(x,y,POLY)
 def outline(fn):
     F=[[fn(x,y) for x in range(W)] for y in range(H)]
-    # 画面左右端に接する辺は「外へ続く」ので端に線を描かない → 端セルは輪郭にしない
     O=[[False]*W for _ in range(H)]
     for y in range(H):
         for x in range(W):
@@ -38,7 +35,6 @@ def outline(fn):
                 if 0<=nx<W and 0<=ny<H:
                     if not F[ny][nx]: edge=True;break
                 else:
-                    # 上下端は輪郭に含める。左右端(x方向)は「外へ続く」ので含めない
                     if dy!=0: edge=True;break
             O[y][x]=edge
     return O
@@ -49,16 +45,40 @@ def stroke(ax,ay,bx,by,t=0.55, mirror=False):
         for x in range(W):
             xx=W-1-x if mirror else x
             if seg(xx,y,ax,ay,bx,by,t): G[y][x]=True
-# 袖口の二重線: 下内側の辺 B->R の内側に平行線
-mx,my=-0.707,-0.707; off=2.1
+mx,my=-0.707,-0.707; off=2.0
 stroke(B[0]+mx*off,B[1]+my*off, R[0]+mx*off,R[1]+my*off, 0.55)
 stroke(B[0]+mx*off,B[1]+my*off, R[0]+mx*off,R[1]+my*off, 0.55, mirror=True)
-# 集中線3本(上中央)
 cxm=(W-1)/2.0
-stroke(cxm-4,1.0, cxm-2.4,4.8, 0.5)
-stroke(cxm,0.2, cxm,4.4, 0.5)
-stroke(cxm+4,1.0, cxm+2.4,4.8, 0.5)
+stroke(cxm-4,0.6, cxm-2.4,4.2, 0.5)
+stroke(cxm,-0.2, cxm,3.8, 0.5)
+stroke(cxm+4,0.6, cxm+2.4,4.2, 0.5)
+
+# 小さな手を袖の下に垂らす(小さめの塗り・指2〜3本、下向き)
+HAND = [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    "#.##.#",
+    "#.##.#",
+    "..#.#.",
+]
+def stamp_hand(ox, oy, mirror=False):
+    # 手首(袖口→手)
+    stroke(ox+3.0, oy-2.0, ox+2.6, oy+0.2, 0.5, mirror=mirror)
+    for jy,row in enumerate(HAND):
+        for ix,ch in enumerate(row):
+            if ch!='#': continue
+            x=ox+ix; y=oy+jy
+            if mirror: x=W-1-x
+            if 0<=x<W and 0<=y<H: G[y][x]=True
+# 左手は中央よりやや左、右手は対称。中央に隙間→触れ合わない
+stamp_hand(13, 25, mirror=False)
+stamp_hand(13, 25, mirror=True)
+
 grid=[['X' if G[y][x] else '.' for x in range(W)] for y in range(H)]
 for row in grid: print(''.join('#' if c=='X' else ' ' for c in row))
 print("symmetric:", all(grid[y][x]==grid[y][W-1-x] for y in range(H) for x in range(W)))
+# 中央で手が触れないこと(中央列が空)
+print("center gap:", all(grid[y][W//2-1]=='.' and grid[y][W//2]=='.' for y in range(26,32)))
 open("met_grid.json","w").write(json.dumps([''.join(r) for r in grid]))
