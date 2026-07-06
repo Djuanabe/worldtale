@@ -21,6 +21,11 @@
 すべて無料枠で運用できます。詳細は [docs/requirements.md](docs/requirements.md) と
 [docs/architecture.md](docs/architecture.md) を参照してください。
 
+## デプロイ
+
+本番デプロイ（Supabase + Cloudflare Workers + Pages、すべて無料枠）の詳細手順は
+[docs/deploy.md](docs/deploy.md) を参照してください。
+
 ## セットアップ手順（概要）
 
 1. **Supabase**: プロジェクトを作成し、SQL Editor で
