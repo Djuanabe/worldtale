@@ -961,7 +961,18 @@ export async function renderPrefPage(
     const overlay = el("div", { class: "reader-overlay" });
     readerEl = overlay;
 
-    const bg = el("div", { class: "reader-bg" });
+    // 背景: 道シーンにズームインした「てい」を保つ。
+    // 同じ都道府県コード（シード）で生成するので、道画面と同じ風景の拡大になる。
+    const sceneBg = el("div", { class: "reader-scene" });
+    const sceneBgCv = buildSceneBackground(
+      prefCode,
+      scene.clientWidth || window.innerWidth,
+      scene.clientHeight || window.innerHeight,
+      scenePhoto
+    );
+    sceneBg.append(sceneBgCv);
+
+    const bg = el("div", { class: "reader-bg" }); // 添付写真（あれば半透明で重ねる）
     const dim = el("div", { class: "reader-dim" });
     const paper = el("div", { class: "reader-paper" });
 
@@ -990,7 +1001,7 @@ export async function renderPrefPage(
     bottomRow.append(avatarWrap, bottomRight);
     stage.append(stream, bottomRow);
 
-    overlay.append(bg, dim, paper, closeBtn, stage);
+    overlay.append(sceneBg, bg, dim, paper, closeBtn, stage);
     document.body.append(overlay);
 
     // チュートリアル用: 人をクリックして物語を開いた合図

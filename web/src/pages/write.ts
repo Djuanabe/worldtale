@@ -18,7 +18,7 @@ export async function renderWritePage(
 
   container.append(pageTitle("物語を書く"));
 
-  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, fieldRows } =
+  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, dateInput, fieldRows } =
     buildStoryFormFields();
 
   const photoInput = el("input", {
@@ -104,7 +104,8 @@ export async function renderWritePage(
         prefecture: Number(prefSelect.value),
         municipality,
         year: Number(yearSelect.value),
-        season: seasonSelect.value
+        season: seasonSelect.value,
+        storyDate: dateInput.value || undefined
       });
     } catch (err) {
       submitBtn.disabled = false;

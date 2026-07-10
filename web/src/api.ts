@@ -17,6 +17,7 @@ export interface StorySummary {
   municipality: string | null;
   year: number;
   season: string | null;
+  storyDate: string | null;
   username: string;
   userHandle: string;
   createdAt: string;
@@ -38,6 +39,7 @@ export interface StoryDetail {
   municipality: string | null;
   year: number;
   season: string | null;
+  storyDate: string | null;
   username: string;
   userHandle: string;
   createdAt: string;
@@ -229,6 +231,7 @@ export function createStory(input: {
   municipality: string;
   year: number;
   season: string;
+  storyDate?: string | null;
 }): Promise<StoryDetail> {
   return request("/api/stories", { method: "POST", body: JSON.stringify(input) });
 }
@@ -242,6 +245,7 @@ export function updateStory(
     municipality: string;
     year: number;
     season: string;
+    storyDate: string | null;
   }>
 ): Promise<StoryDetail> {
   return request(`/api/stories/${encodeURIComponent(id)}`, {

@@ -4,7 +4,7 @@ import { REACTION_TYPES, SEASONS } from '../types';
 import { getSupabase, publicPhotoUrl } from '../lib/supabase';
 import { requireAuth } from '../lib/auth';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors';
-import { excerpt, oneOf, parsePrefecture, parseYear, requireString } from '../lib/validate';
+import { excerpt, oneOf, parseOptionalDate, parsePrefecture, parseYear, requireString, requireText } from '../lib/validate';
 import { countReactionsFor, summarizeReactions } from '../lib/reactions';
 
 export const stories = new Hono<Env>();
@@ -34,7 +34,7 @@ stories.get('/', async (c) => {
 
   let query = sb
     .from('stories')
-    .select('id, title, body, prefecture, municipality, year, season, created_at, user:users!inner(username, handle)', {
+    .select('id, title, body, prefecture, municipality, year, season, story_date, created_at, user:users!inner(username, handle)', {
       count: 'exact',
     })
     .eq('is_hidden', false);
@@ -71,6 +71,7 @@ stories.get('/', async (c) => {
       municipality: r.municipality ?? null,
       year: r.year,
       season: r.season ?? null,
+      storyDate: r.story_date ?? null,
       username: r.user?.username ?? '',
       userHandle: r.user?.handle ?? '',
       createdAt: r.created_at,
@@ -87,17 +88,18 @@ stories.post('/', requireAuth, async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body !== 'object') throw badRequest('JSON ボディが必要です');
   const title = requireString((body as any).title, 'title', 1, 100);
-  const text = requireString((body as any).body, 'body', 1, 20000);
+  const text = requireText((body as any).body, 'body', 1); // 本文は無制限
   const prefecture = parsePrefecture((body as any).prefecture);
   const municipality = requireString((body as any).municipality, 'municipality', 1, 50);
   const year = parseYear((body as any).year);
   const season = oneOf((body as any).season, SEASONS, 'season');
+  const storyDate = parseOptionalDate((body as any).storyDate);
 
   const sb = getSupabase(c.env);
   const { data, error } = await sb
     .from('stories')
-    .insert({ user_id: c.get('userId'), title, body: text, prefecture, municipality, year, season })
-    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
+    .insert({ user_id: c.get('userId'), title, body: text, prefecture, municipality, year, season, story_date: storyDate })
+    .select('id, title, body, prefecture, municipality, year, season, story_date, created_at, updated_at')
     .single();
   if (error) {
     if (isUniqueViolation(error)) {
@@ -115,6 +117,7 @@ stories.post('/', requireAuth, async (c) => {
       municipality: data.municipality,
       year: data.year,
       season: data.season,
+      storyDate: (data as any).story_date ?? null,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     },
@@ -235,7 +238,7 @@ stories.get('/:id', async (c) => {
 
   const { data: story, error } = await sb
     .from('stories')
-    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at, is_hidden, user:users!inner(username, handle)')
+    .select('id, title, body, prefecture, municipality, year, season, story_date, created_at, updated_at, is_hidden, user:users!inner(username, handle)')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -264,6 +267,7 @@ stories.get('/:id', async (c) => {
     municipality: s.municipality ?? null,
     year: s.year,
     season: s.season ?? null,
+    storyDate: s.story_date ?? null,
     username: s.user?.username ?? '',
     userHandle: s.user?.handle ?? '',
     createdAt: s.created_at,
@@ -297,17 +301,18 @@ stories.put('/:id', requireAuth, async (c) => {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const b = body as any;
   if (b.title !== undefined) patch.title = requireString(b.title, 'title', 1, 100);
-  if (b.body !== undefined) patch.body = requireString(b.body, 'body', 1, 20000);
+  if (b.body !== undefined) patch.body = requireText(b.body, 'body', 1); // 本文は無制限
   if (b.prefecture !== undefined) patch.prefecture = parsePrefecture(b.prefecture);
   if (b.municipality !== undefined) patch.municipality = requireString(b.municipality, 'municipality', 1, 50);
   if (b.year !== undefined) patch.year = parseYear(b.year);
   if (b.season !== undefined) patch.season = oneOf(b.season, SEASONS, 'season');
+  if (b.storyDate !== undefined) patch.story_date = parseOptionalDate(b.storyDate); // null で日付を消せる
 
   const { data: updated, error: uErr } = await sb
     .from('stories')
     .update(patch)
     .eq('id', id)
-    .select('id, title, body, prefecture, municipality, year, season, created_at, updated_at')
+    .select('id, title, body, prefecture, municipality, year, season, story_date, created_at, updated_at')
     .single();
   if (uErr) {
     if (isUniqueViolation(uErr)) {
@@ -324,6 +329,7 @@ stories.put('/:id', requireAuth, async (c) => {
     municipality: updated.municipality,
     year: updated.year,
     season: updated.season,
+    storyDate: (updated as any).story_date ?? null,
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
   });

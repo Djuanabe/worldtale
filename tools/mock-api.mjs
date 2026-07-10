@@ -129,6 +129,7 @@ function summary(s) {
     excerpt: s.body.replace(/\n/g, " ").slice(0, 120),
     prefecture: s.prefecture, municipality: s.municipality ?? null,
     year: s.year, season: s.season ?? null,
+    storyDate: s.storyDate ?? null,
     username: u.username, userHandle: u.handle,
     createdAt: s.createdAt, likeCount: c.likeCount, metCount: c.metCount,
   };
@@ -495,6 +496,7 @@ const server = http.createServer(async (req, res) => {
       if (stories.some((x) => x.userId === u.id && x.prefecture === Number(b.prefecture) && x.season === b.season))
         return err(res, 409, "STORY_SLOT_TAKEN", "この場所・季節にはすでにあなたの物語があります");
       const s = seedStory(u.id, Number(b.prefecture), String(b.municipality), Number(b.year), b.season, String(b.title), String(b.body), 0, 0, 0);
+      s.storyDate = b.storyDate || null;
       s.likes = 0; s.mets = 0;
       stories.push(s);
       return json(res, 201, { ...summary(s), body: s.body, photos: [] });
@@ -557,6 +559,7 @@ const server = http.createServer(async (req, res) => {
           id: s.id, title: s.title, body: s.body,
           prefecture: s.prefecture, municipality: s.municipality ?? null,
           year: s.year, season: s.season ?? null,
+          storyDate: s.storyDate ?? null,
           username: u.username, userHandle: u.handle,
           createdAt: s.createdAt, updatedAt: s.updatedAt,
           ...counts(s.id),
@@ -578,6 +581,7 @@ const server = http.createServer(async (req, res) => {
         if (b.municipality !== undefined) s.municipality = String(b.municipality);
         if (b.year !== undefined) s.year = Number(b.year);
         if (b.season !== undefined) s.season = nextSeason;
+        if (b.storyDate !== undefined) s.storyDate = b.storyDate || null;
         s.updatedAt = new Date().toISOString();
         return json(res, 200, { ...summary(s), body: s.body, updatedAt: s.updatedAt, photos: [] });
       }

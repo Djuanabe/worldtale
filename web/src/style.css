@@ -1024,6 +1024,19 @@ textarea {
   }
 }
 
+/* 道シーンにズームインした背景（道画面と同じシードの風景を拡大表示） */
+.reader-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.reader-scene .scene-bg {
+  transform: scale(2.4);
+  transform-origin: 50% 62%;
+}
+
+/* 添付写真は半透明で重ねる（下のズームした道シーンが透ける） */
 .reader-bg {
   position: absolute;
   inset: 0;
@@ -1031,13 +1044,19 @@ textarea {
   background-position: center;
 }
 
+.reader-overlay.has-photo .reader-bg {
+  opacity: 0.55;
+}
+
+/* すこし暗くする幕（写真の有無に関わらず） */
 .reader-dim {
   position: absolute;
   inset: 0;
+  background: rgba(0, 0, 20, 0.4);
 }
 
 .reader-overlay.has-photo .reader-dim {
-  background: rgba(0, 0, 20, 0.45);
+  background: rgba(0, 0, 20, 0.35);
 }
 
 .reader-paper {

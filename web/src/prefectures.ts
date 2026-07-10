@@ -90,20 +90,30 @@ export function compareChronological(
   return sa - sb;
 }
 
-// 物語のメタ情報（都道府県・市区町村・年・季節）を表示用テキストにする。
-// municipality/season が null の古いデータでも崩れないよう、あれば足す形にする。
+// 物語のメタ情報（都道府県・市区町村・年（または日付）・季節）を表示用テキストにする。
+// municipality/season/storyDate が null の古いデータでも崩れないよう、あれば足す形にする。
+// 日付があれば年の代わりにフル日付を出す（日付は年を含むため重複表示を避ける）。
 export function storyMetaText(input: {
   prefecture: number;
   municipality?: string | null;
   year: number;
   season?: string | null;
+  storyDate?: string | null;
 }): string {
   const place = input.municipality
     ? `${prefName(input.prefecture)} ${input.municipality}`
     : prefName(input.prefecture);
-  const parts = [place, `${input.year}年`];
+  const when = input.storyDate ? formatStoryDate(input.storyDate) : `${input.year}年`;
+  const parts = [place, when];
   if (input.season) parts.push(seasonLabel(input.season));
   return parts.join(" ・ ");
+}
+
+// YYYY-MM-DD → 「YYYY年M月D日」
+export function formatStoryDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${Number(m[1])}年${Number(m[2])}月${Number(m[3])}日`;
 }
 
 // ---- 地方区分（地図の2段階選択: 地方ズーム → 都道府県選択 用） ----

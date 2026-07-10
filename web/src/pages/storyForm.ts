@@ -9,6 +9,7 @@ export interface StoryFormFields {
   municipalityInput: HTMLInputElement;
   yearSelect: HTMLSelectElement;
   seasonSelect: HTMLSelectElement;
+  dateInput: HTMLInputElement;
   fieldRows: HTMLElement[];
 }
 
@@ -19,9 +20,10 @@ export function buildStoryFormFields(initial?: {
   municipality?: string | null;
   year?: number;
   season?: string | null;
+  storyDate?: string | null;
 }): StoryFormFields {
   const titleInput = el("input", { type: "text", maxlength: "100" }) as HTMLInputElement;
-  const bodyInput = el("textarea", { maxlength: "20000" }) as HTMLTextAreaElement;
+  const bodyInput = el("textarea", {}) as HTMLTextAreaElement; // 本文は無制限
 
   const prefSelect = el("select") as HTMLSelectElement;
   for (const p of PREFECTURES) {
@@ -45,12 +47,15 @@ export function buildStoryFormFields(initial?: {
     seasonSelect.append(el("option", { value: s.key }, [s.label]));
   }
 
+  const dateInput = el("input", { type: "date" }) as HTMLInputElement;
+
   if (initial?.title !== undefined) titleInput.value = initial.title;
   if (initial?.body !== undefined) bodyInput.value = initial.body;
   prefSelect.value = String(initial?.prefecture ?? 1);
   municipalityInput.value = initial?.municipality ?? "";
   yearSelect.value = String(initial?.year ?? currentYear);
   seasonSelect.value = initial?.season ?? "spring";
+  dateInput.value = initial?.storyDate ?? "";
 
   const fieldRows = [
     el("div", { class: "form-field" }, [el("label", {}, ["タイトル"]), titleInput]),
@@ -64,10 +69,15 @@ export function buildStoryFormFields(initial?: {
       ])
     ]),
     el("div", { class: "form-field" }, [el("label", {}, ["年"]), yearSelect]),
-    el("div", { class: "form-field" }, [el("label", {}, ["季節"]), seasonSelect])
+    el("div", { class: "form-field" }, [el("label", {}, ["季節"]), seasonSelect]),
+    el("div", { class: "form-field" }, [
+      el("label", {}, ["日付（任意）"]),
+      dateInput,
+      el("p", { class: "hint" }, ["覚えていれば。自由に選べます（検索には使われません）"])
+    ])
   ];
 
-  return { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, fieldRows };
+  return { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, dateInput, fieldRows };
 }
 
 export function storyNoticeBox(): HTMLElement {

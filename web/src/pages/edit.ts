@@ -48,14 +48,15 @@ export async function renderEditPage(
   container.innerHTML = "";
   container.append(pageTitle("物語を編集する"));
 
-  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, fieldRows } =
+  const { titleInput, bodyInput, prefSelect, municipalityInput, yearSelect, seasonSelect, dateInput, fieldRows } =
     buildStoryFormFields({
       title: story.title,
       body: story.body,
       prefecture: story.prefecture,
       municipality: story.municipality,
       year: story.year,
-      season: story.season
+      season: story.season,
+      storyDate: story.storyDate
     });
 
   const submitBtn = el("button", { class: "btn", type: "submit" }, ["保存する"]) as HTMLButtonElement;
@@ -107,7 +108,8 @@ export async function renderEditPage(
         prefecture: Number(prefSelect.value),
         municipality,
         year: Number(yearSelect.value),
-        season: seasonSelect.value
+        season: seasonSelect.value,
+        storyDate: dateInput.value || null // 空にしたら日付を消す
       });
       navigate(`/story/${id}`);
     } catch (err) {
