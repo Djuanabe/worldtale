@@ -1,40 +1,32 @@
 # WorldTale — 世界はたくさんの物語でできている
 
+**▶ サイトを見る: https://worldtale.comus.jp** （日本国内のみ対応）
+
+<!-- ![WorldTaleのマップ](docs/screenshot.png) -->
+
 自分の体験を日記のように書き起こし、「場所 × 時」に紐づけて世界に残すソーシャルサイト。
 誰かの過ごした時間と場所を、別の誰かが辿って読むことができます。
 
-- 物語は **都道府県 × 年** に紐づく（プロトタイプ。将来は市区町村 × 季節へ）
-- 読者のリアクションは **「いいね」** と **「出会ってたかも」** の2種類のみ（登録不要）
-- 物語に添えて、その土地・その季節の **風景写真** を1ユーザー1場所1季節につき1枚アップロードでき、
-  その場所のページの背景スライドショーになる
-- アカウントは **ユーザー名・ランダム発行のユーザーID・パスワードのみ**（メール不使用）
+## 特徴
+
+- 🗺 **ドット絵のレトロRPG風・日本地図**。物語が集まった土地ほど色が濃くなる。地方 → 都道府県の2段階で読みにいく
+- 🤝 **「いいね」と「出会ってたかも」** ——同じ時期・同じ場所にいたかもしれない見知らぬ誰かに、そっと反応できる
+- 🎁 **タイムカプセル**。地図の海に浮かぶカプセルを開けると、どこかの誰かの物語がランダムで届く
+- 📷 **風景写真**。その土地・その季節の写真が、場所ページの背景スライドショーになる
+- 🔓 **読む・リアクションは登録不要**。アカウントもメール不要（ユーザー名 + パスワードのみ、実名・住所なし）
+
+物語は **都道府県 × 年** に紐づきます（プロトタイプ。将来は市区町村 × 季節へ細分化予定）。
 
 ## 構成
 
 | ディレクトリ | 内容 | デプロイ先 |
-|---|---|---|
+| --- | --- | --- |
 | `docs/` | 要件定義書・設計書 | — |
-| `supabase/` | DB マイグレーション SQL | Supabase (Free) |
-| `api/` | REST API (Hono + TypeScript) | Cloudflare Workers (Free) |
-| `web/` | SPA (Vite + vanilla TypeScript) | Cloudflare Pages (Free) |
+| `supabase/` | DB マイグレーション SQL | Supabase |
+| `api/` | REST API (Hono + TypeScript) | Cloudflare Workers |
+| `web/` | SPA (Vite + vanilla TypeScript) | Cloudflare Pages |
 
-すべて無料枠で運用できます。詳細は [docs/requirements.md](docs/requirements.md) と
-[docs/architecture.md](docs/architecture.md) を参照してください。
-
-## デプロイ
-
-本番デプロイ（Supabase + Cloudflare Workers + Pages、すべて無料枠）の詳細手順は
-[docs/deploy.md](docs/deploy.md) を参照してください。
-
-## セットアップ手順（概要）
-
-1. **Supabase**: プロジェクトを作成し、SQL Editor で
-   `supabase/migrations/0001_init.sql` を実行。
-   Storage で **public バケット `photos`** を作成。
-2. **API**: `api/README.md` の手順でシークレットを設定し `wrangler deploy`。
-3. **Web**: Cloudflare Pages にリポジトリを接続し、ルート `web/`、
-   ビルドコマンド `npm run build`、出力 `dist`、
-   環境変数 `VITE_API_BASE` に Workers の URL を設定。
+詳細は [docs/requirements.md](docs/requirements.md) と [docs/architecture.md](docs/architecture.md) を参照してください。
 
 ## ローカル開発
 
@@ -61,4 +53,11 @@ cd web && npm i && npm run dev
 ```
 
 デモアカウント: ユーザーID `DEMO123456` / パスワード `password123`
-（投稿・マイページの統計・写真管理まで一通り試せます。データはメモリ上のみ）
+
+## デプロイ
+
+本番デプロイ（Supabase + Cloudflare Workers + Pages）の手順は [docs/deploy.md](docs/deploy.md) を参照してください。
+
+## ライセンス
+
+MIT License（`LICENSE` ファイルを追加してください）
